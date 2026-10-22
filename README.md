@@ -1,0 +1,38 @@
+# First Print Finder
+
+Search a Magic card and see which set it was first printed in. Built for the store counter, where the answer decides which binder a card goes in.
+
+Vite + React + TypeScript, styled with the Kaika design system (`src/kaika/`). Card data and images come from the [Scryfall API](https://scryfall.com/docs/api) in the browser; there is no backend.
+
+```sh
+npm install
+npm run dev          # add --host to open it to your phone on the same Wi-Fi
+npm run build        # type-checks, then builds to dist/
+```
+
+Deploys to Vercel as a plain Vite project (no config needed).
+
+## How "first printing" is decided
+
+All printings of the card are fetched from Scryfall. The first printing is the earliest **paper, non-promo** one. Scryfall's own `is:firstprinting` is not used because it can land on a promo or digital release. A card with only promo or digital printings falls back to the earliest of those, with a warning.
+
+## Binder mode (on by default)
+
+Mirrors how the store files cards: only known sets count. A printing qualifies if it is from Legends (1994-06-01) or later **and** is one of:
+
+- an expansion
+- a Magic 2010 or newer core set (the older "Edition" core sets have no binder)
+- Portal, Portal Second Age, Portal Three Kingdoms, or Anthologies
+
+Everything else is skipped: Duel Decks, From the Vault, Masters sets, Commander decks, box sets, promos, and so on. The rules live in `isBinderSet` in `src/scryfall.ts`. If a card has no qualifying printing, the app shows its true first printing and says so.
+
+### Commander box
+
+Cards in `src/commanderBox.ts` (Sol Ring, Arcane Signet) show **Commander box** as the headline in binder mode, with their true first printing below. Add card names to that list as the box changes.
+
+## Known gaps — check at the store
+
+- **Which products have binders** is not settled. For now only known sets count (see above), so cards first printed in a special product move to the next real set. Anthologies and Portal are assumed to have binders; confirm both. Add or remove sets in `EXTRA_BINDER_SETS` in `src/scryfall.ts`.
+- **Commander decks** (e.g. Commander 2011) are skipped like other products. Cards found only there fall to their next qualifying set, or to the true first printing with a note.
+- **Prepared-spell cards** (Scryfall layout `prepare`, mostly Secrets of Strixhaven, e.g. "Emeritus of Ideation // Ancestral Recall") are separate cards. They are dropped from printings when you search the spell's name, and kept when you search their own name.
+- **Commander box list** only has the two cards mentioned so far (`src/commanderBox.ts`).
