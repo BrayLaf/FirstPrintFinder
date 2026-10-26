@@ -1,3 +1,5 @@
+import { inCommanderBox } from './commanderBox'
+
 const API = 'https://api.scryfall.com'
 
 export interface Card {
@@ -18,7 +20,7 @@ export interface Card {
   digital: boolean
   scryfall_uri: string
   image_uris?: Record<string, string>
-  card_faces?: { image_uris?: Record<string, string>; mana_cost?: string }[]
+  card_faces?: { image_uris?: Record<string, string>; mana_cost?: string; type_line?: string }[]
 }
 
 interface List<T> {
@@ -43,8 +45,24 @@ export interface Pick {
   binderMiss: boolean
 }
 
-async function get<T>(url: string, signal?: AbortSignal): Promise<T> {
-  const res = await fetch(url, { signal, headers: { Accept: 'application/json' } })
+// Scryfall asks for 50-100ms between requests. List lookups fire many in a row,
+// so every request waits for its slot.
+let nextSlot = 0
+async function paced() {
+  const now = Date.now()
+  const wait = nextSlot - now
+  nextSlot = Math.max(now, nextSlot) + 100
+  if (wait > 0) await new Promise((r) => setTimeout(r, wait))
+}
+
+async function get<T>(url: string, signal?: AbortSignal, body?: unknown): Promise<T> {
+  await paced()
+  const res = await fetch(url, {
+    signal,
+    method: body ? 'POST' : 'GET',
+    headers: body ? { Accept: 'application/json', 'Content-Type': 'application/json' } : { Accept: 'application/json' },
+    body: body ? JSON.stringify(body) : undefined,
+  })
   if (res.status === 404) throw new NotFoundError()
   if (!res.ok) throw new Error(`Scryfall returned ${res.status}`)
   return res.json()
@@ -126,6 +144,149 @@ export async function fetchResult(name: string, signal?: AbortSignal): Promise<R
   const own = prints.filter((c) => c.layout !== 'prepare' || c.name.toLowerCase() === name.toLowerCase())
   const kept = own.length ? own : prints
   return { name: kept[0]?.name ?? name, prints: kept }
+}
+
+// ---- Lists ---------------------------------------------------------------
+
+const BASIC_LANDS = new Set(
+  ['Plains', 'Island', 'Swamp', 'Mountain', 'Forest', 'Wastes']
+    .flatMap((n) => [n, `Snow-Covered ${n}`])
+    .map((n) => n.toLowerCase()),
+)
+export const isBasicLand = (name: string) => BASIC_LANDS.has(name.toLowerCase())
+
+/** Match list lines to exact card names. Unknown lines get one fuzzy try each. */
+export async function resolveNames(
+  inputs: string[],
+  onProgress?: (done: number) => void,
+): Promise<{ found: { input: string; name: string }[]; missing: string[] }> {
+  // Look up by front face: the collection endpoint finds "Fire" but not "Fire // Ice".
+  const key = (s: string) => s.split(' // ')[0].trim().toLowerCase()
+  const byKey = new Map<string, string>()
+  for (let i = 0; i < inputs.length; i += 75) {
+    const batch = inputs.slice(i, i + 75)
+    const { data } = await get<{ data: Card[] }>(`${API}/cards/collection`, undefined, {
+      identifiers: batch.map((n) => ({ name: n.split(' // ')[0].trim() })),
+    })
+    // Full names win over face names, so "Ancestral Recall" never lands on
+    // the prepared-spell card "Emeritus of Ideation // Ancestral Recall".
+    for (const c of data) byKey.set(c.name.toLowerCase(), c.name)
+    for (const c of data) for (const face of c.name.split(' // ')) {
+      if (!byKey.has(face.toLowerCase())) byKey.set(face.toLowerCase(), c.name)
+    }
+    onProgress?.(Math.min(i + 75, inputs.length))
+  }
+  const found: { input: string; name: string }[] = []
+  const missing: string[] = []
+  for (const input of inputs) {
+    const name = byKey.get(key(input))
+    if (name) { found.push({ input, name }); continue }
+    try { found.push({ input, name: await resolveName(input) }) } catch { missing.push(input) }
+  }
+  return { found, missing }
+}
+
+/**
+ * All printings for many exact card names, oldest first. Names are OR'd into one
+ * search per batch; Scryfall silently drops terms from very long queries, so
+ * batches stay small.
+ */
+export async function fetchPrintings(names: string[], onProgress?: (done: number) => void): Promise<Map<string, Card[]>> {
+  const out = new Map<string, Card[]>(names.map((n) => [n.toLowerCase(), []]))
+  for (let i = 0; i < names.length; i += 20) {
+    const batch = names.slice(i, i + 20)
+    const q = batch.map((n) => `!"${n.replace(/"/g, '\\"')}"`).join(' or ')
+    let url: string | undefined = `${API}/cards/search?q=${encodeURIComponent(q)}&unique=prints&order=released&dir=asc`
+    for (let page = 0; url && page < 40; page++) {
+      const list: List<Card> = await get(url)
+      // Keyed by exact name, which also drops prepared-spell cards that only
+      // matched on a face (same rule as fetchResult).
+      for (const c of list.data) out.get(c.name.toLowerCase())?.push(c)
+      url = list.has_more ? list.next_page : undefined
+    }
+    onProgress?.(Math.min(i + 20, names.length))
+  }
+  for (const prints of out.values()) prints.sort((a, b) => a.released_at.localeCompare(b.released_at))
+  return out
+}
+
+export type ColorKey = 'W' | 'U' | 'B' | 'R' | 'G' | 'M' | 'C' | 'L'
+export const COLOR_LABEL: Record<ColorKey, string> = {
+  W: 'White', U: 'Blue', B: 'Black', R: 'Red', G: 'Green', M: 'Multicolor', C: 'Colorless', L: 'Land',
+}
+const COLOR_ORDER: ColorKey[] = ['W', 'U', 'B', 'R', 'G', 'M', 'C', 'L']
+
+/**
+ * Store color rule: only the mana symbols in the card's mana cost count, not
+ * color identity. Split cards use both halves; other two-part cards (DFCs,
+ * adventures) use the front face. No colored pips: Land if it's a land, else Colorless.
+ */
+export function colorOf(c: Card): ColorKey {
+  const front = c.card_faces?.[0]
+  const cost = (c.layout === 'split' ? c.mana_cost : front?.mana_cost ?? c.mana_cost) ?? ''
+  const colors = new Set(cost.match(/[WUBRG]/g))
+  if (colors.size > 1) return 'M'
+  if (colors.size === 1) return [...colors][0] as ColorKey
+  return (front?.type_line ?? c.type_line ?? '').split(' // ')[0].includes('Land') ? 'L' : 'C'
+}
+
+// Binders file mythics and rares together, then uncommons, then commons.
+const RARITY_RANK: Record<Card['rarity'], number> = { mythic: 0, rare: 0, uncommon: 1, common: 2, special: 3, bonus: 3 }
+
+export interface ListCard {
+  name: string
+  qty: number
+  /** Empty for basic lands, which skip the printing lookup. */
+  prints: Card[]
+}
+
+export interface Placed extends ListCard {
+  pick: Pick | null
+  inBox: boolean
+  color: ColorKey
+}
+
+export interface SetGroup {
+  key: string
+  title: string
+  /** Shown under the title: year and set code, or what the special group means. */
+  sub: string
+  cards: Placed[]
+}
+
+/**
+ * Group a list by the binder each card is filed in: real sets oldest first, then
+ * the Commander box, cards with no binder, and basic lands. Inside a group, rows
+ * follow binder order: rarity, then WUBRG, then name.
+ */
+export function groupForBinders(list: ListCard[], binder: boolean): SetGroup[] {
+  const sets = new Map<string, SetGroup & { released: string }>()
+  const box: Placed[] = []
+  const none: Placed[] = []
+  const basics: Placed[] = []
+  for (const item of list) {
+    if (!item.prints.length) { basics.push({ ...item, pick: null, inBox: false, color: 'L' }); continue }
+    const inBox = binder && inCommanderBox(item.name)
+    const pick = pickFirst(item.prints, binder && !inBox)
+    const placed: Placed = { ...item, pick, inBox, color: colorOf(pick.first) }
+    if (inBox) { box.push(placed); continue }
+    if (pick.binderMiss) { none.push(placed); continue }
+    const { set, set_name, released_at } = pick.first
+    const group = sets.get(set) ?? { key: set, title: set_name, sub: `${released_at.slice(0, 4)} · ${set.toUpperCase()}`, released: released_at, cards: [] }
+    group.cards.push(placed)
+    sets.set(set, group)
+  }
+  const groups: SetGroup[] = [...sets.values()].sort((a, b) => a.released.localeCompare(b.released) || a.title.localeCompare(b.title))
+  if (box.length) groups.push({ key: '_box', title: 'Commander box', sub: 'Kept in the Commander quick-pull box', cards: box })
+  if (none.length) groups.push({ key: '_none', title: 'No binder', sub: 'No known set qualifies; tap a card to see its earliest printing', cards: none })
+  if (basics.length) groups.push({ key: '_basic', title: 'Basic lands', sub: 'Not filed in set binders', cards: basics })
+  for (const g of groups) g.cards.sort(binderOrder)
+  return groups
+}
+
+function binderOrder(a: Placed, b: Placed) {
+  const rank = (p: Placed) => (p.pick ? RARITY_RANK[p.pick.first.rarity] : 2)
+  return rank(a) - rank(b) || COLOR_ORDER.indexOf(a.color) - COLOR_ORDER.indexOf(b.color) || a.name.localeCompare(b.name)
 }
 
 export const scgSearchUrl = (name: string) =>

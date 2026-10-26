@@ -1,6 +1,6 @@
 // Typed handles onto the Kaika bundle, which registers itself on window.Kaika
 // (see main.tsx: React must be on window before the bundle loads).
-import type { ComponentType, HTMLAttributes, ButtonHTMLAttributes, InputHTMLAttributes } from 'react'
+import type { ComponentType, HTMLAttributes, ButtonHTMLAttributes, InputHTMLAttributes, RefAttributes } from 'react'
 import type * as K from './kaika/types'
 
 declare global {
@@ -15,7 +15,7 @@ const pick = <P,>(name: string) => k()[name] as ComponentType<P>
 type Div = HTMLAttributes<HTMLElement>
 
 export const Button = pick<K.ButtonProps & ButtonHTMLAttributes<HTMLButtonElement>>('Button')
-export const Input = pick<K.InputProps & InputHTMLAttributes<HTMLInputElement>>('Input')
+export const Input = pick<K.InputProps & InputHTMLAttributes<HTMLInputElement> & RefAttributes<HTMLInputElement>>('Input')
 export const Badge = pick<K.BadgeProps>('Badge')
 export const Card = pick<K.CardProps>('Card')
 export const CardHeader = pick<Div>('CardHeader')

@@ -30,6 +30,17 @@ Everything else is skipped: Duel Decks, From the Vault, Masters sets, Commander 
 
 Cards in `src/commanderBox.ts` (Sol Ring, Arcane Signet) show **Commander box** as the headline in binder mode, with their true first printing below. Add card names to that list as the box changes.
 
+## List tab
+
+Paste a decklist, upload a `.txt`/`.csv`, or search cards one at a time to build a list. Cards are grouped by the binder they're filed in, so a coworker can walk the binders without looking at card images:
+
+- **Groups**: first-print sets oldest first, then **Commander box**, **No binder** (binder mode on, nothing qualifies) and **Basic lands**.
+- **Rows** follow binder order: mythic/rare together, then uncommon, then common, then special/bonus (e.g. timeshifted); within each W, U, B, R, G, multicolor, colorless, land; then A–Z. Tap a row for the image, printing details and links.
+- **Color** is read from the mana symbols in the mana cost only, not color identity. Hybrid pips count both colors. Split cards use both halves; DFCs and adventures use the front face. No colored pips means Land if it's a land, else Colorless (so no-cost cards like Ancestral Vision are Colorless).
+- **Parsing** (`src/parseList.ts`) accepts `4 Card`, `4x Card`, `Card x4` and bare names, ignores set codes, foil marks and section headers, and reads CSVs with a name column. Duplicates merge.
+- Lines that don't match a card go to **Not recognized**; "Search" there replaces the line with the card you pick.
+- The list (names and counts only) is kept in `localStorage` (`fpf-list`); printings are looked up again on each visit.
+
 ## Known gaps — check at the store
 
 - **Which products have binders** is not settled. For now only known sets count (see above), so cards first printed in a special product move to the next real set. Anthologies and Portal are assumed to have binders; confirm both. Add or remove sets in `EXTRA_BINDER_SETS` in `src/scryfall.ts`.
