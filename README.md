@@ -28,7 +28,8 @@ Mirrors how the store files cards: only known sets count. A printing qualifies i
 | Conspiracy (shared) | CNS, CN2 |
 | Mystical Archive (shared) | STA, SOA (Secrets of Strixhaven) |
 | Universes Beyond (shared) | Fallout, Doctor Who, Warhammer 40,000 |
-| Their own binders | Unglued, Unstable, Unfinity; Time Spiral Timeshifted; Modern Horizons 1–3; Jumpstart, Jumpstart 2022, Foundations Jumpstart; Lord of the Rings; Assassin's Creed; Marvel Universe (MAR); Marvel Super Heroes Commander (MSC, which also holds the Marvel Jumpstart cards) |
+| A set's binder, at the front | The commander decks released with a set (New Capenna Commander, MH3 Commander, Final Fantasy Commander, ...), divided from the set. The list is `COMMANDER_PARENT`; add new ones as they release |
+| Their own binders | Commander Legends, Commander Legends: Battle for Baldur's Gate; Unglued, Unstable, Unfinity; Time Spiral Timeshifted; Modern Horizons 1–3; Jumpstart, Jumpstart 2022, Foundations Jumpstart; Lord of the Rings; Assassin's Creed; Marvel Universe (MAR); Marvel Super Heroes Commander (MSC, which also holds the Marvel Jumpstart cards) |
 
 Shared binders are divided by set, so the app still names the set and adds "in the … binder". In the List, sets in one shared binder sit next to each other.
 
@@ -59,6 +60,6 @@ Two modes (saved as `fpf-list-mode`):
 - **Binder list** above was confirmed at the store. Add or remove sets in `SHARED_BINDERS` / `EXTRA_BINDER_SETS` in `src/scryfall.ts`. Not yet confirmed:
   - Other draft-innovation sets (Ravnica: Clue Edition, Mystery Booster Commander), Modern Horizons Timeshifts (H1R/H2R) and Planechase plane cards are skipped.
 - **Case cards** ($12+ at Star City Games) go in the case instead of a binder. The app can't tell: Scryfall has no Star City prices, so check the price on the card's Star City Games link.
-- **Commander decks** (e.g. Commander 2011) are skipped like other products. Cards found only there fall to their next qualifying set, or to the true first printing with a note.
+- **Standalone Commander decks** (e.g. Commander 2011) are skipped like other products. Cards found only there fall to their next qualifying set, or to the true first printing with a note. Commander decks tied to a set are filed with that set (see above).
 - **Prepared-spell cards** (Scryfall layout `prepare`, mostly Secrets of Strixhaven, e.g. "Emeritus of Ideation // Ancestral Recall") are separate cards. They are dropped from printings when you search the spell's name, and kept when you search their own name.
 - **Commander box list** only has the two cards mentioned so far (`src/commanderBox.ts`).

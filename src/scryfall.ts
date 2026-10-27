@@ -121,21 +121,46 @@ const SHARED_BINDERS: { title: string; sets: string[] }[] = [
   { title: 'Universes Beyond', sets: ['pip', 'who', '40k'] },
 ]
 const SHARED_BY_SET = new Map(SHARED_BINDERS.flatMap((b) => b.sets.map((s) => [s, b.title] as const)))
+// Commander decks released with a set are filed at the front of that set's binder,
+// divided from it. Commander code -> [set code, set name], from Scryfall's
+// `parent_set_code`. Add new ones as they release.
+const COMMANDER_PARENT = new Map<string, [string, string]>([
+  ['znc', ['znr', 'Zendikar Rising']], ['khc', ['khm', 'Kaldheim']],
+  ['afc', ['afr', 'Adventures in the Forgotten Realms']], ['mic', ['mid', 'Innistrad: Midnight Hunt']],
+  ['voc', ['vow', 'Innistrad: Crimson Vow']], ['nec', ['neo', 'Kamigawa: Neon Dynasty']],
+  ['ncc', ['snc', 'Streets of New Capenna']], ['dmc', ['dmu', 'Dominaria United']],
+  ['brc', ['bro', "The Brothers' War"]], ['onc', ['one', 'Phyrexia: All Will Be One']],
+  ['moc', ['mom', 'March of the Machine']], ['ltc', ['ltr', 'The Lord of the Rings: Tales of Middle-earth']],
+  ['woc', ['woe', 'Wilds of Eldraine']], ['lcc', ['lci', 'The Lost Caverns of Ixalan']],
+  ['mkc', ['mkm', 'Murders at Karlov Manor']], ['otc', ['otj', 'Outlaws of Thunder Junction']],
+  ['m3c', ['mh3', 'Modern Horizons 3']], ['blc', ['blb', 'Bloomburrow']],
+  ['dsc', ['dsk', 'Duskmourn: House of Horror']], ['fdc', ['fdn', 'Foundations']],
+  ['drc', ['dft', 'Aetherdrift']], ['tdc', ['tdm', 'Tarkir: Dragonstorm']],
+  ['fic', ['fin', 'Final Fantasy']], ['eoc', ['eoe', 'Edge of Eternities']],
+  ['ecc', ['ecl', 'Lorwyn Eclipsed']], ['soc', ['sos', 'Secrets of Strixhaven']],
+  ['frc', ['fra', 'Reality Fracture']], ['trc', ['trk', 'Star Trek']],
+  ['mdc', ['mdd', 'Marvel: Darkhold Destiny']],
+  // Marvel Super Heroes Commander (msc) has its own binder; see below.
+])
 // Products with a binder of their own (Core Set 2019-2021 and Foundations are covered by the core rule).
 const EXTRA_BINDER_SETS = new Set([
   'ugl', 'ust', 'unf', // Un-sets; Unhinged and Unsanctioned have no binder
   'mh1', 'mh2', 'mh3', 'jmp', 'j22', 'j25', 'ltr', 'acr',
+  'cmr', 'clb', // Commander Legends, Commander Legends: Battle for Baldur's Gate
   'msc', // Marvel Super Heroes Commander, with its Jumpstart cards
   'mar', // Marvel Universe
 ])
 const isBinderSet = (c: Card) =>
   SHARED_BY_SET.has(c.set) ||
+  COMMANDER_PARENT.has(c.set) ||
   EXTRA_BINDER_SETS.has(c.set) ||
   (c.released_at >= LEGENDS &&
     (c.set_type === 'expansion' || (c.set_type === 'core' && c.released_at >= MAGIC_2010)))
 
 /** Name of the shared binder a set is filed in, or null when the set has its own. */
-export const sharedBinderOf = (set: string) => SHARED_BY_SET.get(set) ?? null
+export const sharedBinderOf = (set: string) => COMMANDER_PARENT.get(set)?.[1] ?? SHARED_BY_SET.get(set) ?? null
+/** Sets with the same key share a binder: a commander deck keys to its parent set. */
+const binderKey = (set: string) => COMMANDER_PARENT.get(set)?.[0] ?? SHARED_BY_SET.get(set) ?? set
 
 /**
  * First printing = the earliest paper printing that isn't a promo.
@@ -293,7 +318,7 @@ export interface SetGroup {
  * follow binder order: rarity, then WUBRG, then name.
  */
 export function groupForBinders(list: ListCard[], binder: boolean): SetGroup[] {
-  const sets = new Map<string, SetGroup & { released: string; shared: string | null }>()
+  const sets = new Map<string, SetGroup & { released: string; binderKey: string; front: boolean }>()
   const box: Placed[] = []
   const none: Placed[] = []
   const basics: Placed[] = []
@@ -307,19 +332,23 @@ export function groupForBinders(list: ListCard[], binder: boolean): SetGroup[] {
     const { set, set_name, released_at } = pick.first
     const shared = binder ? sharedBinderOf(set) : null
     const sub = `${released_at.slice(0, 4)} · ${set.toUpperCase()}${shared ? ` · in the ${shared} binder` : ''}`
-    const group = sets.get(set) ?? { key: set, title: set_name, sub, released: released_at, shared, cards: [] }
+    const group = sets.get(set) ?? {
+      key: set, title: set_name, sub, released: released_at, cards: [],
+      binderKey: binder ? binderKey(set) : set, front: binder && COMMANDER_PARENT.has(set),
+    }
     group.cards.push(placed)
     sets.set(set, group)
   }
-  // Sets in a shared binder sit together, placed by the oldest of them on the list.
+  // Sets sharing a binder sit together, placed by the oldest of them on the list;
+  // a commander deck comes before its set, as it sits at the front of the binder.
   const binderStart = new Map<string, string>()
   for (const g of sets.values()) {
-    const k = g.shared ?? g.key
+    const k = g.binderKey
     if (!binderStart.has(k) || g.released < binderStart.get(k)!) binderStart.set(k, g.released)
   }
-  const start = (g: { key: string; shared: string | null }) => binderStart.get(g.shared ?? g.key)!
   const groups: SetGroup[] = [...sets.values()].sort((a, b) =>
-    start(a).localeCompare(start(b)) || (a.shared ?? '').localeCompare(b.shared ?? '') ||
+    binderStart.get(a.binderKey)!.localeCompare(binderStart.get(b.binderKey)!) ||
+    a.binderKey.localeCompare(b.binderKey) || Number(b.front) - Number(a.front) ||
     a.released.localeCompare(b.released) || a.title.localeCompare(b.title))
   if (box.length) groups.push({ key: '_box', title: 'Commander box', sub: 'Kept in the Commander quick-pull box', cards: box })
   if (none.length) groups.push({ key: '_none', title: 'No binder', sub: 'No known set qualifies; tap a card to see its earliest printing', cards: none })
