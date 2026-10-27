@@ -45,18 +45,26 @@ export interface Pick {
   binderMiss: boolean
 }
 
-// Scryfall asks for 50-100ms between requests. List lookups fire many in a row,
-// so every request waits for its slot.
-let nextSlot = 0
-async function paced() {
+// Scryfall's hard limits: 2/second for search, named and collection, 10/second for
+// everything else (autocomplete). A 429 locks the app out for 30 seconds. List
+// lookups fire many in a row, so every request waits for its slot.
+const nextSlot = { slow: 0, fast: 0 }
+async function paced(url: string) {
+  const lane = /\/cards\/(search|named|collection)/.test(url) ? 'slow' : 'fast'
   const now = Date.now()
-  const wait = nextSlot - now
-  nextSlot = Math.max(now, nextSlot) + 100
+  const wait = nextSlot[lane] - now
+  nextSlot[lane] = Math.max(now, nextSlot[lane]) + (lane === 'slow' ? 500 : 100)
   if (wait > 0) await new Promise((r) => setTimeout(r, wait))
 }
 
+export class RateLimitError extends Error {
+  constructor() {
+    super('Scryfall asked us to slow down. Wait 30 seconds, then try again.')
+  }
+}
+
 async function get<T>(url: string, signal?: AbortSignal, body?: unknown): Promise<T> {
-  await paced()
+  await paced(url)
   const res = await fetch(url, {
     signal,
     method: body ? 'POST' : 'GET',
@@ -64,6 +72,7 @@ async function get<T>(url: string, signal?: AbortSignal, body?: unknown): Promis
     body: body ? JSON.stringify(body) : undefined,
   })
   if (res.status === 404) throw new NotFoundError()
+  if (res.status === 429) throw new RateLimitError()
   if (!res.ok) throw new Error(`Scryfall returned ${res.status}`)
   return res.json()
 }
@@ -95,17 +104,38 @@ const isPaper = (c: Card) => c.games.includes('paper') && !c.digital
 const isRegularPaper = (c: Card) => isPaper(c) && !c.promo && !NOT_REGULAR_SET_TYPES.has(c.set_type)
 
 // Store binder rule: only known sets count. That means expansions and the Magic 2010+
-// core sets, from Legends on. The old "Edition" core sets and every special product
-// (Duel Decks, From the Vault, Masters, Commander decks...) are skipped.
+// core sets from Legends on, plus the products listed below. The old "Edition" core
+// sets and every other product (Portal, Anthologies, Duel Decks, Masters, Commander
+// decks...) are skipped.
 const LEGENDS = '1994-06-01'
 const MAGIC_2010 = '2009-07-17'
-// Products that do have a binder: Portal, Portal Second Age, Portal Three Kingdoms, Anthologies.
-const EXTRA_BINDER_SETS = new Set(['por', 'p02', 'ptk', 'ath'])
+
+// Binders that hold several sets, divided by set inside. Sets listed here have a
+// binder even when the rule above would skip them (e.g. Arabian Nights predates Legends).
+const SHARED_BINDERS: { title: string; sets: string[] }[] = [
+  { title: 'Arabian Nights / Antiquities', sets: ['arn', 'atq'] },
+  { title: 'Core sets', sets: ['m10', 'm11', 'm12', 'm13', 'm14', 'm15', 'ori'] },
+  { title: 'Planechase / Battlebond / Game Night / Commander Masters', sets: ['hop', 'pc2', 'pca', 'bbd', 'gnt', 'gn2', 'gn3', 'cmm'] },
+  { title: 'Conspiracy', sets: ['cns', 'cn2'] },
+  { title: 'Mystical Archive', sets: ['sta', 'soa'] },
+  { title: 'Universes Beyond', sets: ['pip', 'who', '40k'] },
+]
+const SHARED_BY_SET = new Map(SHARED_BINDERS.flatMap((b) => b.sets.map((s) => [s, b.title] as const)))
+// Products with a binder of their own (Core Set 2019-2021 and Foundations are covered by the core rule).
+const EXTRA_BINDER_SETS = new Set([
+  'ugl', 'ust', 'unf', // Un-sets; Unhinged and Unsanctioned have no binder
+  'mh1', 'mh2', 'mh3', 'jmp', 'j22', 'j25', 'ltr', 'acr',
+  'msc', // Marvel Super Heroes Commander, with its Jumpstart cards
+  'mar', // Marvel Universe
+])
 const isBinderSet = (c: Card) =>
-  c.released_at >= LEGENDS &&
-  (EXTRA_BINDER_SETS.has(c.set) ||
-    c.set_type === 'expansion' ||
-    (c.set_type === 'core' && c.released_at >= MAGIC_2010))
+  SHARED_BY_SET.has(c.set) ||
+  EXTRA_BINDER_SETS.has(c.set) ||
+  (c.released_at >= LEGENDS &&
+    (c.set_type === 'expansion' || (c.set_type === 'core' && c.released_at >= MAGIC_2010)))
+
+/** Name of the shared binder a set is filed in, or null when the set has its own. */
+export const sharedBinderOf = (set: string) => SHARED_BY_SET.get(set) ?? null
 
 /**
  * First printing = the earliest paper printing that isn't a promo.
@@ -181,7 +211,10 @@ export async function resolveNames(
   for (const input of inputs) {
     const name = byKey.get(key(input))
     if (name) { found.push({ input, name }); continue }
-    try { found.push({ input, name: await resolveName(input) }) } catch { missing.push(input) }
+    try { found.push({ input, name: await resolveName(input) }) } catch (e) {
+      if (e instanceof RateLimitError) throw e
+      missing.push(input)
+    }
   }
   return { found, missing }
 }
@@ -260,7 +293,7 @@ export interface SetGroup {
  * follow binder order: rarity, then WUBRG, then name.
  */
 export function groupForBinders(list: ListCard[], binder: boolean): SetGroup[] {
-  const sets = new Map<string, SetGroup & { released: string }>()
+  const sets = new Map<string, SetGroup & { released: string; shared: string | null }>()
   const box: Placed[] = []
   const none: Placed[] = []
   const basics: Placed[] = []
@@ -272,11 +305,22 @@ export function groupForBinders(list: ListCard[], binder: boolean): SetGroup[] {
     if (inBox) { box.push(placed); continue }
     if (pick.binderMiss) { none.push(placed); continue }
     const { set, set_name, released_at } = pick.first
-    const group = sets.get(set) ?? { key: set, title: set_name, sub: `${released_at.slice(0, 4)} · ${set.toUpperCase()}`, released: released_at, cards: [] }
+    const shared = binder ? sharedBinderOf(set) : null
+    const sub = `${released_at.slice(0, 4)} · ${set.toUpperCase()}${shared ? ` · in the ${shared} binder` : ''}`
+    const group = sets.get(set) ?? { key: set, title: set_name, sub, released: released_at, shared, cards: [] }
     group.cards.push(placed)
     sets.set(set, group)
   }
-  const groups: SetGroup[] = [...sets.values()].sort((a, b) => a.released.localeCompare(b.released) || a.title.localeCompare(b.title))
+  // Sets in a shared binder sit together, placed by the oldest of them on the list.
+  const binderStart = new Map<string, string>()
+  for (const g of sets.values()) {
+    const k = g.shared ?? g.key
+    if (!binderStart.has(k) || g.released < binderStart.get(k)!) binderStart.set(k, g.released)
+  }
+  const start = (g: { key: string; shared: string | null }) => binderStart.get(g.shared ?? g.key)!
+  const groups: SetGroup[] = [...sets.values()].sort((a, b) =>
+    start(a).localeCompare(start(b)) || (a.shared ?? '').localeCompare(b.shared ?? '') ||
+    a.released.localeCompare(b.released) || a.title.localeCompare(b.title))
   if (box.length) groups.push({ key: '_box', title: 'Commander box', sub: 'Kept in the Commander quick-pull box', cards: box })
   if (none.length) groups.push({ key: '_none', title: 'No binder', sub: 'No known set qualifies; tap a card to see its earliest printing', cards: none })
   if (basics.length) groups.push({ key: '_basic', title: 'Basic lands', sub: 'Not filed in set binders', cards: basics })

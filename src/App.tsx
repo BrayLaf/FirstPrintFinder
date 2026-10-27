@@ -8,8 +8,8 @@ import { CardCombo } from './CardCombo'
 import { ListView } from './ListView'
 import { useCardList } from './useCardList'
 import {
-  fetchResult, imageOf, NotFoundError, resolveName, scgSearchUrl,
-  pickFirst, type Card as ScryCard, type Result,
+  fetchResult, imageOf, NotFoundError, RateLimitError, resolveName, scgSearchUrl,
+  pickFirst, sharedBinderOf, type Card as ScryCard, type Result,
 } from './scryfall'
 import { BinderToggle, fmtDate, LINK_PRIMARY, LINK_SECONDARY, RARITY_VARIANT } from './ui'
 
@@ -64,7 +64,8 @@ export default function App() {
       setResult(null)
       setStatus({
         kind: 'error',
-        message: e instanceof NotFoundError ? `No card named “${name}”.` : 'Scryfall could not be reached. Try again.',
+        message: e instanceof NotFoundError ? `No card named “${name}”.`
+          : e instanceof RateLimitError ? e.message : 'Scryfall could not be reached. Try again.',
       })
     }
   }, [])
@@ -96,9 +97,9 @@ export default function App() {
 
   const submit = async (text: string, exact: boolean) => {
     if (exact) return load(text)
-    try { load(await resolveName(text)) } catch {
+    try { load(await resolveName(text)) } catch (e) {
       setResult(null)
-      setStatus({ kind: 'error', message: `No card named “${text}”.` })
+      setStatus({ kind: 'error', message: e instanceof RateLimitError ? e.message : `No card named “${text}”.` })
     }
   }
 
@@ -172,7 +173,8 @@ function Printings({ result, binder }: { result: Result; binder: boolean }) {
   const inBox = binder && inCommanderBox(name)
   // Box cards report their true first printing; the box is the storage answer.
   const { first, fallback, earliest, binderMiss } = useMemo(() => pickFirst(prints, binder && !inBox), [prints, binder, inBox])
-  const paperCount = prints.filter((p) => p.games.includes('paper')).length
+  const shared = binder && !inBox && !binderMiss ? sharedBinderOf(first.set) : null
+  const paperCount =prints.filter((p) => p.games.includes('paper')).length
   const img = imageOf(first, 'png') ?? imageOf(first, 'large')
 
   return (
@@ -184,6 +186,7 @@ function Printings({ result, binder }: { result: Result; binder: boolean }) {
           <p className="answer-meta">
             <strong>{name}</strong> · {inBox && <>first printed in {first.set_name} · </>}
             {first.released_at.slice(0, 4)} · {first.set.toUpperCase()} #{first.collector_number}
+            {shared && <> · in the {shared} binder</>}
           </p>
         </div>
         {img && <img className="hero-img" src={img} alt={`${name}, ${first.set_name} printing`} width={488} height={680} />}

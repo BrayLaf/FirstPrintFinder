@@ -11,7 +11,7 @@ See `README.md` for the binder rules and the list of known gaps to confirm at th
 
 ## Where things live
 
-- `src/scryfall.ts` — API client and all first-printing logic (`pickFirst`, `isBinderSet`, `NO_BINDER`/`EXTRA_BINDER_SETS`). Business rules go here, not in components.
+- `src/scryfall.ts` — API client and all first-printing logic (`pickFirst`, `isBinderSet`, `SHARED_BINDERS`/`EXTRA_BINDER_SETS`). Business rules go here, not in components.
 - `src/commanderBox.ts` — card names the store keeps in the Commander quick-pull box. The user edits this list.
 - `src/App.tsx`, `src/app.css` — the shell, Card tab and styles. `src/ListView.tsx` is the List tab; `src/CardCombo.tsx` is the autocomplete box both tabs use; `src/ui.tsx` holds shared bits (link-button classes, rarity badge variants, binder toggle).
 - `src/useCardList.ts` — List tab state, persisted to `localStorage` (`fpf-list`). Called in `App`, not `ListView`, because Kaika's `TabPanel` unmounts inactive tabs.
@@ -26,7 +26,7 @@ See `README.md` for the binder rules and the list of known gaps to confirm at th
 - First printing is computed client-side from all printings (earliest paper, non-promo). Do not switch to Scryfall's `is:firstprinting`; it can pick promos/digital.
 - Scryfall's `!"name"` search matches any card face, so prepared-spell cards (`layout: "prepare"`, e.g. "Emeritus of Ideation // Ancestral Recall") come back for the spell's name. `fetchResult` filters them out unless searched by full name.
 - Scryfall rejects requests with a generic user agent. Browsers are fine; a Node script needs a custom `User-Agent` header or it gets a 400.
-- Scryfall asks for ~50-100ms between requests. Autocomplete is debounced at 120ms and aborts stale requests; keep it that way. `get()` also paces every request 100ms apart, which list lookups rely on.
+- Scryfall hard limits: `/cards/search`, `/cards/named` and `/cards/collection` 2/second, everything else 10/second. A 429 locks the client out for 30 seconds (`RateLimitError`). `get()` paces those three endpoints 500ms apart and the rest 100ms; list lookups rely on it. Autocomplete is debounced at 120ms and aborts stale requests; keep it that way. Ad-hoc test scripts must go through `get()` too, or they trip the 429.
 - List lookups: names resolve through `POST /cards/collection` (75 per call; it finds "Fire" but not "Fire // Ice", so lookups use the front face), then printings come from OR'd `!"name"` searches. Scryfall silently drops terms from long OR queries (~80 names gave wrong totals), so `fetchPrintings` batches 20.
 - Result images use Scryfall's transparent `png`, not `large`, because the JPG has white corners baked in.
 - The set name of the first printing is the most important thing on the page. It must stay the largest text in the result and visible without scrolling on a phone.
@@ -37,6 +37,6 @@ Check every visual change in Claude in Chrome against `http://localhost:5173`, i
 
 ## Conventions
 
-- Keep logic changes small and covered by checking real cards (Dark Ritual → Ice Age, Terror → Anthologies, Shivan Dragon → Magic 2010, Sol Ring → Commander box, Ancestral Recall → no prepared-spell cards).
+- Keep logic changes small and covered by checking real cards (Dark Ritual → Ice Age, Terror → Mirrodin, Goblin Matron → Urza's Saga, Shivan Dragon → Magic 2010 in the Core sets binder, Juzám Djinn → Arabian Nights, Sol Ring → Commander box, Ancestral Recall → no prepared-spell cards).
 - Update the README's "Known gaps" section when a binder rule changes or a new open question comes up.
 - Preferences and settings are stored in `localStorage` (`fpf-theme`, `fpf-binder`, `fpf-list`, `fpf-list-mode`), always inside try/catch.

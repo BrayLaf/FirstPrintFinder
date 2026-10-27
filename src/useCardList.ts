@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import { LIST_MAX_CARDS, type Entry } from './parseList'
-import { fetchPrintings, isBasicLand, resolveNames, type Card, type ListCard } from './scryfall'
+import { fetchPrintings, isBasicLand, RateLimitError, resolveNames, type Card, type ListCard } from './scryfall'
 
 export interface ListEntry extends Entry {
   /** Pulling mode: copies found in the binder, 0 to qty. Unset = not checked yet. */
@@ -32,7 +32,7 @@ function mergeInto<T extends Entry>(list: T[], add: Entry[]): T[] {
   return next
 }
 
-const OFFLINE = 'Scryfall could not be reached. Try again.'
+const failed = (e: unknown) => (e instanceof RateLimitError ? e.message : 'Scryfall could not be reached. Try again.')
 
 export function useCardList() {
   const [saved] = useState(readSaved)
@@ -72,8 +72,8 @@ export function useCardList() {
         setCards((cs) => cs.filter((c) => !gone.has(c.name.toLowerCase())))
       }
       rerender()
-    } catch {
-      setError(OFFLINE)
+    } catch (e) {
+      setError(failed(e))
     }
   }, [])
 
@@ -86,8 +86,8 @@ export function useCardList() {
     let resolved: Awaited<ReturnType<typeof resolveNames>>
     try {
       resolved = await resolveNames(take.map((e) => e.name), (done) => setBusy(`Matching card names… ${done} / ${take.length}`))
-    } catch {
-      setError(OFFLINE)
+    } catch (e) {
+      setError(failed(e))
       return
     }
     const qtyOf = new Map(take.map((e) => [e.name, e.qty]))
