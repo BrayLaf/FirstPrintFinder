@@ -1,3 +1,5 @@
+import { inCommanderBox } from './commanderBox'
+
 const API = 'https://api.scryfall.com'
 
 export interface Card {
@@ -18,7 +20,7 @@ export interface Card {
   digital: boolean
   scryfall_uri: string
   image_uris?: Record<string, string>
-  card_faces?: { image_uris?: Record<string, string>; mana_cost?: string }[]
+  card_faces?: { image_uris?: Record<string, string>; mana_cost?: string; type_line?: string }[]
 }
 
 interface List<T> {
@@ -43,9 +45,34 @@ export interface Pick {
   binderMiss: boolean
 }
 
-async function get<T>(url: string, signal?: AbortSignal): Promise<T> {
-  const res = await fetch(url, { signal, headers: { Accept: 'application/json' } })
+// Scryfall's hard limits: 2/second for search, named and collection, 10/second for
+// everything else (autocomplete). A 429 locks the app out for 30 seconds. List
+// lookups fire many in a row, so every request waits for its slot.
+const nextSlot = { slow: 0, fast: 0 }
+async function paced(url: string) {
+  const lane = /\/cards\/(search|named|collection)/.test(url) ? 'slow' : 'fast'
+  const now = Date.now()
+  const wait = nextSlot[lane] - now
+  nextSlot[lane] = Math.max(now, nextSlot[lane]) + (lane === 'slow' ? 500 : 100)
+  if (wait > 0) await new Promise((r) => setTimeout(r, wait))
+}
+
+export class RateLimitError extends Error {
+  constructor() {
+    super('Scryfall asked us to slow down. Wait 30 seconds, then try again.')
+  }
+}
+
+async function get<T>(url: string, signal?: AbortSignal, body?: unknown): Promise<T> {
+  await paced(url)
+  const res = await fetch(url, {
+    signal,
+    method: body ? 'POST' : 'GET',
+    headers: body ? { Accept: 'application/json', 'Content-Type': 'application/json' } : { Accept: 'application/json' },
+    body: body ? JSON.stringify(body) : undefined,
+  })
   if (res.status === 404) throw new NotFoundError()
+  if (res.status === 429) throw new RateLimitError()
   if (!res.ok) throw new Error(`Scryfall returned ${res.status}`)
   return res.json()
 }
@@ -77,17 +104,38 @@ const isPaper = (c: Card) => c.games.includes('paper') && !c.digital
 const isRegularPaper = (c: Card) => isPaper(c) && !c.promo && !NOT_REGULAR_SET_TYPES.has(c.set_type)
 
 // Store binder rule: only known sets count. That means expansions and the Magic 2010+
-// core sets, from Legends on. The old "Edition" core sets and every special product
-// (Duel Decks, From the Vault, Masters, Commander decks...) are skipped.
+// core sets from Legends on, plus the products listed below. The old "Edition" core
+// sets and every other product (Portal, Anthologies, Duel Decks, Masters, Commander
+// decks...) are skipped.
 const LEGENDS = '1994-06-01'
 const MAGIC_2010 = '2009-07-17'
-// Products that do have a binder: Portal, Portal Second Age, Portal Three Kingdoms, Anthologies.
-const EXTRA_BINDER_SETS = new Set(['por', 'p02', 'ptk', 'ath'])
+
+// Binders that hold several sets, divided by set inside. Sets listed here have a
+// binder even when the rule above would skip them (e.g. Arabian Nights predates Legends).
+const SHARED_BINDERS: { title: string; sets: string[] }[] = [
+  { title: 'Arabian Nights / Antiquities', sets: ['arn', 'atq'] },
+  { title: 'Core sets', sets: ['m10', 'm11', 'm12', 'm13', 'm14', 'm15', 'ori'] },
+  { title: 'Planechase / Battlebond / Game Night / Commander Masters', sets: ['hop', 'pc2', 'pca', 'bbd', 'gnt', 'gn2', 'gn3', 'cmm'] },
+  { title: 'Conspiracy', sets: ['cns', 'cn2'] },
+  { title: 'Mystical Archive', sets: ['sta', 'soa'] },
+  { title: 'Universes Beyond', sets: ['pip', 'who', '40k'] },
+]
+const SHARED_BY_SET = new Map(SHARED_BINDERS.flatMap((b) => b.sets.map((s) => [s, b.title] as const)))
+// Products with a binder of their own (Core Set 2019-2021 and Foundations are covered by the core rule).
+const EXTRA_BINDER_SETS = new Set([
+  'ugl', 'ust', 'unf', // Un-sets; Unhinged and Unsanctioned have no binder
+  'mh1', 'mh2', 'mh3', 'jmp', 'j22', 'j25', 'ltr', 'acr',
+  'msc', // Marvel Super Heroes Commander, with its Jumpstart cards
+  'mar', // Marvel Universe
+])
 const isBinderSet = (c: Card) =>
-  c.released_at >= LEGENDS &&
-  (EXTRA_BINDER_SETS.has(c.set) ||
-    c.set_type === 'expansion' ||
-    (c.set_type === 'core' && c.released_at >= MAGIC_2010))
+  SHARED_BY_SET.has(c.set) ||
+  EXTRA_BINDER_SETS.has(c.set) ||
+  (c.released_at >= LEGENDS &&
+    (c.set_type === 'expansion' || (c.set_type === 'core' && c.released_at >= MAGIC_2010)))
+
+/** Name of the shared binder a set is filed in, or null when the set has its own. */
+export const sharedBinderOf = (set: string) => SHARED_BY_SET.get(set) ?? null
 
 /**
  * First printing = the earliest paper printing that isn't a promo.
@@ -126,6 +174,163 @@ export async function fetchResult(name: string, signal?: AbortSignal): Promise<R
   const own = prints.filter((c) => c.layout !== 'prepare' || c.name.toLowerCase() === name.toLowerCase())
   const kept = own.length ? own : prints
   return { name: kept[0]?.name ?? name, prints: kept }
+}
+
+// ---- Lists ---------------------------------------------------------------
+
+const BASIC_LANDS = new Set(
+  ['Plains', 'Island', 'Swamp', 'Mountain', 'Forest', 'Wastes']
+    .flatMap((n) => [n, `Snow-Covered ${n}`])
+    .map((n) => n.toLowerCase()),
+)
+export const isBasicLand = (name: string) => BASIC_LANDS.has(name.toLowerCase())
+
+/** Match list lines to exact card names. Unknown lines get one fuzzy try each. */
+export async function resolveNames(
+  inputs: string[],
+  onProgress?: (done: number) => void,
+): Promise<{ found: { input: string; name: string }[]; missing: string[] }> {
+  // Look up by front face: the collection endpoint finds "Fire" but not "Fire // Ice".
+  const key = (s: string) => s.split(' // ')[0].trim().toLowerCase()
+  const byKey = new Map<string, string>()
+  for (let i = 0; i < inputs.length; i += 75) {
+    const batch = inputs.slice(i, i + 75)
+    const { data } = await get<{ data: Card[] }>(`${API}/cards/collection`, undefined, {
+      identifiers: batch.map((n) => ({ name: n.split(' // ')[0].trim() })),
+    })
+    // Full names win over face names, so "Ancestral Recall" never lands on
+    // the prepared-spell card "Emeritus of Ideation // Ancestral Recall".
+    for (const c of data) byKey.set(c.name.toLowerCase(), c.name)
+    for (const c of data) for (const face of c.name.split(' // ')) {
+      if (!byKey.has(face.toLowerCase())) byKey.set(face.toLowerCase(), c.name)
+    }
+    onProgress?.(Math.min(i + 75, inputs.length))
+  }
+  const found: { input: string; name: string }[] = []
+  const missing: string[] = []
+  for (const input of inputs) {
+    const name = byKey.get(key(input))
+    if (name) { found.push({ input, name }); continue }
+    try { found.push({ input, name: await resolveName(input) }) } catch (e) {
+      if (e instanceof RateLimitError) throw e
+      missing.push(input)
+    }
+  }
+  return { found, missing }
+}
+
+/**
+ * All printings for many exact card names, oldest first. Names are OR'd into one
+ * search per batch; Scryfall silently drops terms from very long queries, so
+ * batches stay small.
+ */
+export async function fetchPrintings(names: string[], onProgress?: (done: number) => void): Promise<Map<string, Card[]>> {
+  const out = new Map<string, Card[]>(names.map((n) => [n.toLowerCase(), []]))
+  for (let i = 0; i < names.length; i += 20) {
+    const batch = names.slice(i, i + 20)
+    const q = batch.map((n) => `!"${n.replace(/"/g, '\\"')}"`).join(' or ')
+    let url: string | undefined = `${API}/cards/search?q=${encodeURIComponent(q)}&unique=prints&order=released&dir=asc`
+    for (let page = 0; url && page < 40; page++) {
+      const list: List<Card> = await get(url)
+      // Keyed by exact name, which also drops prepared-spell cards that only
+      // matched on a face (same rule as fetchResult).
+      for (const c of list.data) out.get(c.name.toLowerCase())?.push(c)
+      url = list.has_more ? list.next_page : undefined
+    }
+    onProgress?.(Math.min(i + 20, names.length))
+  }
+  for (const prints of out.values()) prints.sort((a, b) => a.released_at.localeCompare(b.released_at))
+  return out
+}
+
+export type ColorKey = 'W' | 'U' | 'B' | 'R' | 'G' | 'M' | 'C' | 'L'
+export const COLOR_LABEL: Record<ColorKey, string> = {
+  W: 'White', U: 'Blue', B: 'Black', R: 'Red', G: 'Green', M: 'Multicolor', C: 'Colorless', L: 'Land',
+}
+const COLOR_ORDER: ColorKey[] = ['W', 'U', 'B', 'R', 'G', 'M', 'C', 'L']
+
+/**
+ * Store color rule: only the mana symbols in the card's mana cost count, not
+ * color identity. Split cards use both halves; other two-part cards (DFCs,
+ * adventures) use the front face. No colored pips: Land if it's a land, else Colorless.
+ */
+export function colorOf(c: Card): ColorKey {
+  const front = c.card_faces?.[0]
+  const cost = (c.layout === 'split' ? c.mana_cost : front?.mana_cost ?? c.mana_cost) ?? ''
+  const colors = new Set(cost.match(/[WUBRG]/g))
+  if (colors.size > 1) return 'M'
+  if (colors.size === 1) return [...colors][0] as ColorKey
+  return (front?.type_line ?? c.type_line ?? '').split(' // ')[0].includes('Land') ? 'L' : 'C'
+}
+
+// Binders file mythics and rares together, then uncommons, then commons.
+const RARITY_RANK: Record<Card['rarity'], number> = { mythic: 0, rare: 0, uncommon: 1, common: 2, special: 3, bonus: 3 }
+
+export interface ListCard {
+  name: string
+  qty: number
+  /** Empty for basic lands, which skip the printing lookup. */
+  prints: Card[]
+}
+
+export interface Placed extends ListCard {
+  pick: Pick | null
+  inBox: boolean
+  color: ColorKey
+}
+
+export interface SetGroup {
+  key: string
+  title: string
+  /** Shown under the title: year and set code, or what the special group means. */
+  sub: string
+  cards: Placed[]
+}
+
+/**
+ * Group a list by the binder each card is filed in: real sets oldest first, then
+ * the Commander box, cards with no binder, and basic lands. Inside a group, rows
+ * follow binder order: rarity, then WUBRG, then name.
+ */
+export function groupForBinders(list: ListCard[], binder: boolean): SetGroup[] {
+  const sets = new Map<string, SetGroup & { released: string; shared: string | null }>()
+  const box: Placed[] = []
+  const none: Placed[] = []
+  const basics: Placed[] = []
+  for (const item of list) {
+    if (!item.prints.length) { basics.push({ ...item, pick: null, inBox: false, color: 'L' }); continue }
+    const inBox = binder && inCommanderBox(item.name)
+    const pick = pickFirst(item.prints, binder && !inBox)
+    const placed: Placed = { ...item, pick, inBox, color: colorOf(pick.first) }
+    if (inBox) { box.push(placed); continue }
+    if (pick.binderMiss) { none.push(placed); continue }
+    const { set, set_name, released_at } = pick.first
+    const shared = binder ? sharedBinderOf(set) : null
+    const sub = `${released_at.slice(0, 4)} · ${set.toUpperCase()}${shared ? ` · in the ${shared} binder` : ''}`
+    const group = sets.get(set) ?? { key: set, title: set_name, sub, released: released_at, shared, cards: [] }
+    group.cards.push(placed)
+    sets.set(set, group)
+  }
+  // Sets in a shared binder sit together, placed by the oldest of them on the list.
+  const binderStart = new Map<string, string>()
+  for (const g of sets.values()) {
+    const k = g.shared ?? g.key
+    if (!binderStart.has(k) || g.released < binderStart.get(k)!) binderStart.set(k, g.released)
+  }
+  const start = (g: { key: string; shared: string | null }) => binderStart.get(g.shared ?? g.key)!
+  const groups: SetGroup[] = [...sets.values()].sort((a, b) =>
+    start(a).localeCompare(start(b)) || (a.shared ?? '').localeCompare(b.shared ?? '') ||
+    a.released.localeCompare(b.released) || a.title.localeCompare(b.title))
+  if (box.length) groups.push({ key: '_box', title: 'Commander box', sub: 'Kept in the Commander quick-pull box', cards: box })
+  if (none.length) groups.push({ key: '_none', title: 'No binder', sub: 'No known set qualifies; tap a card to see its earliest printing', cards: none })
+  if (basics.length) groups.push({ key: '_basic', title: 'Basic lands', sub: 'Not filed in set binders', cards: basics })
+  for (const g of groups) g.cards.sort(binderOrder)
+  return groups
+}
+
+function binderOrder(a: Placed, b: Placed) {
+  const rank = (p: Placed) => (p.pick ? RARITY_RANK[p.pick.first.rarity] : 2)
+  return rank(a) - rank(b) || COLOR_ORDER.indexOf(a.color) - COLOR_ORDER.indexOf(b.color) || a.name.localeCompare(b.name)
 }
 
 export const scgSearchUrl = (name: string) =>
