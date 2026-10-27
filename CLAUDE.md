@@ -39,4 +39,4 @@ Check every visual change in Claude in Chrome against `http://localhost:5173`, i
 
 - Keep logic changes small and covered by checking real cards (Dark Ritual → Ice Age, Terror → Anthologies, Shivan Dragon → Magic 2010, Sol Ring → Commander box, Ancestral Recall → no prepared-spell cards).
 - Update the README's "Known gaps" section when a binder rule changes or a new open question comes up.
-- Preferences and settings are stored in `localStorage` (`fpf-theme`, `fpf-binder`), always inside try/catch.
+- Preferences and settings are stored in `localStorage` (`fpf-theme`, `fpf-binder`, `fpf-list`, `fpf-list-mode`), always inside try/catch.

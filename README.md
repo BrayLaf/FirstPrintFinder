@@ -39,7 +39,12 @@ Paste a decklist, upload a `.txt`/`.csv`, or search cards one at a time to build
 - **Color** is read from the mana symbols in the mana cost only, not color identity. Hybrid pips count both colors. Split cards use both halves; DFCs and adventures use the front face. No colored pips means Land if it's a land, else Colorless (so no-cost cards like Ancestral Vision are Colorless).
 - **Parsing** (`src/parseList.ts`) accepts `4 Card`, `4x Card`, `Card x4` and bare names, ignores set codes, foil marks and section headers, and reads CSVs with a name column. Duplicates merge.
 - Lines that don't match a card go to **Not recognized**; "Search" there replaces the line with the card you pick.
-- The list (names and counts only) is kept in `localStorage` (`fpf-list`); printings are looked up again on each visit.
+- The list (names, counts and marks) is kept in `localStorage` (`fpf-list`); printings are looked up again on each visit.
+
+Two modes (saved as `fpf-list-mode`):
+
+- **Sorting**: a card added by search scrolls into view and is highlighted in its binder group, so you can see what else goes in that binder.
+- **Pulling**: for a customer's decklist. Each row gets **Found** (all copies) / **Not found** (none) buttons, and rows with more than one copy also get a "2 of 4 found" counter. The message box at the bottom builds the reply ("Cards we had" / "We didn't have") with a Copy button; a partly found card appears in both sections with its counts. Unmarked cards and unrecognized lines are left out, with a warning. Marks never rely on color alone (two coworkers are colorblind): the pressed button is filled, bold and shows ✓/✕, fully found names are struck through, a partial count is bold, and the row edge is solid for found, dashed for not found, dotted for partly found.
 
 ## Known gaps — check at the store
 

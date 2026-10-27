@@ -2,10 +2,15 @@ import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'r
 import { LIST_MAX_CARDS, type Entry } from './parseList'
 import { fetchPrintings, isBasicLand, resolveNames, type Card, type ListCard } from './scryfall'
 
-// Only names and counts are saved; printings are looked up again on load so
-// binder rules and new sets always apply.
+export interface ListEntry extends Entry {
+  /** Pulling mode: copies found in the binder, 0 to qty. Unset = not checked yet. */
+  found?: number
+}
+
+// Only names, counts and marks are saved; printings are looked up again on load
+// so binder rules and new sets always apply.
 interface Saved {
-  cards: Entry[]
+  cards: ListEntry[]
   missing: Entry[]
 }
 
@@ -17,12 +22,12 @@ function readSaved(): Saved {
   return { cards: [], missing: [] }
 }
 
-function mergeInto(list: Entry[], add: Entry[]): Entry[] {
+function mergeInto<T extends Entry>(list: T[], add: Entry[]): T[] {
   const next = list.map((e) => ({ ...e }))
   for (const a of add) {
     const prev = next.find((e) => e.name.toLowerCase() === a.name.toLowerCase())
     if (prev) prev.qty += a.qty
-    else next.push({ ...a })
+    else next.push({ ...a } as T)
   }
   return next
 }
@@ -31,7 +36,7 @@ const OFFLINE = 'Scryfall could not be reached. Try again.'
 
 export function useCardList() {
   const [saved] = useState(readSaved)
-  const [cards, setCards] = useState<Entry[]>(saved.cards)
+  const [cards, setCards] = useState<ListEntry[]>(saved.cards)
   const [missing, setMissing] = useState<Entry[]>(saved.missing)
   // Lookups await the network, so by the time they read this the latest render has landed.
   const cardsRef = useRef(cards)
@@ -102,8 +107,18 @@ export function useCardList() {
   useEffect(() => { run(() => loadPrints(saved.cards.map((c) => c.name))) }, [run, loadPrints, saved])
 
   const setQty = useCallback((name: string, qty: number) => {
-    setCards((cs) => (qty < 1 ? cs.filter((c) => c.name !== name) : cs.map((c) => (c.name === name ? { ...c, qty } : c))))
+    setCards((cs) => (qty < 1
+      ? cs.filter((c) => c.name !== name)
+      : cs.map((c) => (c.name === name ? { ...c, qty, found: c.found === undefined ? undefined : Math.min(c.found, qty) } : c))))
   }, [])
+
+  const setFound = useCallback((name: string, found: number | undefined) => {
+    setCards((cs) => cs.map((c) => (c.name === name
+      ? { ...c, found: found === undefined ? undefined : Math.max(0, Math.min(found, c.qty)) }
+      : c)))
+  }, [])
+
+  const clearMarks = useCallback(() => setCards((cs) => cs.map(({ found: _, ...c }) => c)), [])
 
   const dropMissing = useCallback((name: string) => setMissing((ms) => ms.filter((m) => m.name !== name)), [])
 
@@ -127,5 +142,5 @@ export function useCardList() {
     return { ready, pending, total: cards.reduce((n, c) => n + c.qty, 0) }
   }, [cards, version])
 
-  return { ready, pending, total, missing, busy, error, note, add, retry, setQty, dropMissing, clear }
+  return { cards, ready, pending, total, missing, busy, error, note, add, retry, setQty, setFound, clearMarks, dropMissing, clear }
 }
