@@ -185,10 +185,11 @@ export function pickFirst(prints: Card[], binder: boolean): Pick {
 }
 
 // Case cards: the store keeps anything $11+ at Star City Games in the case, not a
-// binder. Scryfall has no Star City prices and usually runs lower, so $6-18 there is
-// "maybe" and $19+ is almost surely the case. Either way, check the Star City link.
-const CASE_MAYBE_USD = 6
-const CASE_USD = 19
+// binder. Scryfall has no Star City prices and usually runs ~15% lower. Checked on 292
+// cards (Oct 2026): the cheapest case card was $8.60 on Scryfall and every card $13.50+
+// was a case card, so $8-13 is "maybe" and $14+ is the case. Check the Star City link.
+const CASE_MAYBE_USD = 8
+const CASE_USD = 14
 
 export interface CaseFlag {
   tier: 'maybe' | 'case'
