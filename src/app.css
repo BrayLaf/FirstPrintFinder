@@ -128,7 +128,7 @@ h1, h2 { font-family: var(--font-serif); font-weight: 400; margin: 0; }
 .missing-name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 
 .list-summary {
-  display: flex; align-items: center; justify-content: space-between; gap: var(--space-3);
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-3);
   padding-bottom: var(--space-2); border-bottom: 1px solid var(--color-border);
   color: var(--color-text-secondary); font-size: var(--text-sm);
 }
@@ -223,3 +223,23 @@ h1, h2 { font-family: var(--font-serif); font-weight: 400; margin: 0; }
   .row-line { gap: 0; }
   .row-line > .marks { padding-top: 0; }
 }
+
+/* Case cards ($11+ at Star City go in the case). Text and icon carry the meaning,
+   with a solid edge for "case" and dashed for "maybe", never color alone. */
+.case-note {
+  margin-top: var(--space-3); padding: var(--space-2) var(--space-3); font-size: var(--text-sm);
+  border-radius: var(--radius-base); border: 1px solid var(--color-warning); border-left-width: 4px;
+  background: var(--color-warning-subtle); color: var(--color-text);
+}
+.case-note.case-maybe { border-style: dashed; }
+.case-note.case-case { border-color: var(--color-danger); background: var(--color-danger-subtle); }
+.case-note p { margin: 0; }
+.case-note p + p { margin-top: var(--space-1); color: var(--color-text-secondary); }
+.row-info .case-note { margin-top: 0; }
+.case-badge {
+  display: inline-flex; align-items: center; white-space: nowrap; padding: 0 var(--space-2); min-height: 1.5rem;
+  font-size: var(--text-xs); font-weight: 600; color: var(--color-text); font-variant-numeric: tabular-nums;
+  border: 1px dashed var(--color-warning); border-radius: var(--radius-base); background: var(--color-warning-subtle);
+}
+.case-badge.case-case { border-style: solid; border-color: var(--color-danger); background: var(--color-danger-subtle); }
+.case-count { margin-inline-end: auto; font-weight: 600; color: var(--color-text); }

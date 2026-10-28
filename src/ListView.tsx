@@ -3,7 +3,7 @@ import { Badge, Button, Card, CardContent } from './kaika'
 import { CardCombo } from './CardCombo'
 import { parseList, type Entry } from './parseList'
 import { COLOR_LABEL, groupForBinders, imageOf, scgSearchUrl, type Placed, type SetGroup } from './scryfall'
-import { BinderToggle, fmtDate, LINK_PRIMARY, LINK_SECONDARY, RARITY_VARIANT } from './ui'
+import { BinderToggle, CaseBadge, CaseNote, fmtDate, LINK_PRIMARY, LINK_SECONDARY, RARITY_VARIANT } from './ui'
 import type { ListEntry, useCardList } from './useCardList'
 
 type List = ReturnType<typeof useCardList>
@@ -89,6 +89,8 @@ export function ListView({ list, binder, setBinder }: { list: List; binder: bool
   }
 
   const empty = list.total === 0 && list.missing.length === 0
+  const caseCount = { case: 0, maybe: 0 }
+  for (const g of groups) for (const c of g.cards) if (c.caseFlag) caseCount[c.caseFlag.tier] += c.qty
   const counts = { found: 0, missing: 0, open: 0 }
   for (const c of list.cards) {
     if (c.found === undefined) counts.open += c.qty
@@ -191,6 +193,13 @@ export function ListView({ list, binder, setBinder }: { list: List; binder: bool
           ) : (
             <span>{plural(list.total, 'card')} · {plural(groups.length, 'group')}</span>
           )}
+          {(caseCount.case > 0 || caseCount.maybe > 0) && (
+            <span className="case-count">
+              {caseCount.case > 0 && <>▲ {caseCount.case} case</>}
+              {caseCount.case > 0 && caseCount.maybe > 0 && ' · '}
+              {caseCount.maybe > 0 && <>△ {caseCount.maybe} maybe case</>}
+            </span>
+          )}
           <Button
             variant={confirmClear ? 'danger' : 'ghost'} size="sm"
             onClick={() => { if (confirmClear) { list.clear(); setConfirmClear(false); setPasteOpen(true) } else setConfirmClear(true) }}
@@ -280,7 +289,7 @@ function SetSection({ group, ...rowProps }: { group: SetGroup } & RowProps) {
 function Row({ card, onQty, recent, marks, onFound }: { card: Placed } & RowProps) {
   const [open, setOpen] = useState(false)
   const self = useRef<HTMLLIElement>(null)
-  const { name, qty, pick, inBox, color } = card
+  const { name, qty, pick, inBox, color, caseFlag } = card
   const first = pick?.first
   const img = first && (imageOf(first, 'png') ?? imageOf(first, 'large'))
   const found = marks?.get(name)
@@ -302,6 +311,7 @@ function Row({ card, onQty, recent, marks, onFound }: { card: Placed } & RowProp
           <span className="rarity">{first && <Badge variant={RARITY_VARIANT[first.rarity]} size="sm">{first.rarity}</Badge>}</span>
           <span className="color"><span className={`pip pip-${color}`} aria-hidden />{COLOR_LABEL[color]}</span>
           <span className="row-name">{name}</span>
+          {caseFlag && <CaseBadge flag={caseFlag} />}
           <span className="chev" aria-hidden>▾</span>
         </button>
         {marks && (
@@ -348,6 +358,7 @@ function Row({ card, onQty, recent, marks, onFound }: { card: Placed } & RowProp
             {pick?.binderMiss && <p className="hint">No known set qualifies, so this is its earliest printing overall.</p>}
             {pick?.fallback === 'promo-only' && <p className="hint">No regular paper printing; this is its earliest promo.</p>}
             {pick?.fallback === 'digital-only' && <p className="hint">Never printed on paper; this is its earliest digital printing.</p>}
+            {caseFlag && <CaseNote flag={caseFlag} name={name} />}
             {first?.type_line && <p className="row-type">{first.type_line}</p>}
             <div className="row-qty">
               <Button variant="secondary" size="sm" iconOnly aria-label="One fewer" onClick={() => onQty(name, qty - 1)}>−</Button>
