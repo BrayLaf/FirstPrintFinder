@@ -59,8 +59,8 @@ Two modes (saved as `fpf-list-mode`):
 
 Cards worth $11+ at Star City Games go in the case, not a binder. Scryfall has no Star City prices and usually comes in lower, so the app warns from Scryfall's price of the card's **cheapest** paper printing (non-foil; foil only for foil-only printings; gold-bordered and other memorabilia skipped):
 
-- **$6–18: "Maybe a case card"**. Check the Star City link before walking to the binder.
-- **$19+: "Case card"**. Almost surely in the case; the Star City link is there to confirm.
+- **$8–13: "Maybe a case card"**. Check the Star City link before walking to the binder.
+- **$14+: "Case card"**. Almost surely in the case; the Star City link is there to confirm.
 
 The Card tab shows the warning under the set name with the price and a Star City link. In the List tab (Sorting and Pulling) cards stay in their binder group with a "Case card" / "Maybe case" badge and price on the row, the same note in the row details, and a case count in the summary bar. Like the Pulling marks, the badges differ by text, icon (▲/△) and solid vs dashed edge, not color alone.
 
@@ -68,7 +68,7 @@ The Card tab shows the warning under the set name with the price and a Star City
 
 - **Binder list** above was confirmed at the store. Add or remove sets in `SHARED_BINDERS` / `EXTRA_BINDER_SETS` in `src/scryfall.ts`. Not yet confirmed:
   - Other draft-innovation sets (Ravnica: Clue Edition, Mystery Booster Commander), Modern Horizons Timeshifts (H1R/H2R) and Planechase plane cards are skipped.
-- **Case card warning** is a guess from Scryfall prices, which usually run below Star City's. Not yet checked against the case at the store; adjust `CASE_MAYBE_USD` / `CASE_USD` in `src/scryfall.ts` if it flags too much or too little.
+- **Case card warning** thresholds come from comparing 292 random cards' cheapest Scryfall price with Star City's cheapest NM non-foil price (Oct 2026). Star City ran a median 1.15× Scryfall above $3; the cheapest case card was $8.60 on Scryfall (Mnemonic Deluge) and the priciest non-case card $13.07 (Jace, Cunning Castaway), so $8 has little margin. Prices drift: recheck now and then, and adjust `CASE_MAYBE_USD` / `CASE_USD` in `src/scryfall.ts`. It compares the cheapest copy at each store; a pricier printing of a cheaper card can still be a case card.
 - **Standalone Commander decks** (e.g. Commander 2011) are skipped like other products. Cards found only there fall to their next qualifying set, or to the true first printing with a note. Commander decks tied to a set are filed with that set (see above).
 - **Prepared-spell cards** (Scryfall layout `prepare`, mostly Secrets of Strixhaven, e.g. "Emeritus of Ideation // Ancestral Recall") are separate cards. They are dropped from printings when you search the spell's name, and kept when you search their own name.
 - **Commander box list** only has the two cards mentioned so far (`src/commanderBox.ts`).
