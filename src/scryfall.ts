@@ -21,6 +21,7 @@ export interface Card {
   scryfall_uri: string
   image_uris?: Record<string, string>
   card_faces?: { image_uris?: Record<string, string>; mana_cost?: string; type_line?: string }[]
+  prices?: { usd?: string | null; usd_foil?: string | null; usd_etched?: string | null }
 }
 
 interface List<T> {
@@ -183,6 +184,35 @@ export function pickFirst(prints: Card[], binder: boolean): Pick {
   return { first: filed, fallback: null, earliest: filed.id === plain.first.id ? null : plain.first, binderMiss: false }
 }
 
+// Case cards: the store keeps anything $11+ at Star City Games in the case, not a
+// binder. Scryfall has no Star City prices and usually runs lower, so $6-18 there is
+// "maybe" and $19+ is almost surely the case. Either way, check the Star City link.
+const CASE_MAYBE_USD = 6
+const CASE_USD = 19
+
+export interface CaseFlag {
+  tier: 'maybe' | 'case'
+  /** Cheapest non-foil paper price on Scryfall, the one the tier is based on. */
+  usd: number
+}
+
+/**
+ * Case warning from the cheapest paper printing's non-foil price, so "case" means
+ * even the cheapest copy is expensive. Foil prices only count for a printing that
+ * has no non-foil price (foil-only cards). Null when cheap or unpriced.
+ */
+export function caseFlagOf(prints: Card[]): CaseFlag | null {
+  let usd = Infinity
+  for (const c of prints) {
+    // Gold-bordered World Championship decks and other memorabilia sell cheap and aren't real copies.
+    if (!isPaper(c) || c.set_type === 'memorabilia' || c.set_type === 'token') continue
+    const p = parseFloat(c.prices?.usd ?? c.prices?.usd_foil ?? c.prices?.usd_etched ?? '')
+    if (p < usd) usd = p
+  }
+  if (usd < CASE_MAYBE_USD || usd === Infinity) return null
+  return { tier: usd >= CASE_USD ? 'case' : 'maybe', usd }
+}
+
 export async function fetchResult(name: string, signal?: AbortSignal): Promise<Result> {
   const q = `!"${name.replace(/"/g, '\\"')}"`
   let url: string | undefined = `${API}/cards/search?q=${encodeURIComponent(q)}&unique=prints&order=released&dir=asc`
@@ -302,6 +332,7 @@ export interface Placed extends ListCard {
   pick: Pick | null
   inBox: boolean
   color: ColorKey
+  caseFlag: CaseFlag | null
 }
 
 export interface SetGroup {
@@ -323,10 +354,10 @@ export function groupForBinders(list: ListCard[], binder: boolean): SetGroup[] {
   const none: Placed[] = []
   const basics: Placed[] = []
   for (const item of list) {
-    if (!item.prints.length) { basics.push({ ...item, pick: null, inBox: false, color: 'L' }); continue }
+    if (!item.prints.length) { basics.push({ ...item, pick: null, inBox: false, color: 'L', caseFlag: null }); continue }
     const inBox = binder && inCommanderBox(item.name)
     const pick = pickFirst(item.prints, binder && !inBox)
-    const placed: Placed = { ...item, pick, inBox, color: colorOf(pick.first) }
+    const placed: Placed = { ...item, pick, inBox, color: colorOf(pick.first), caseFlag: caseFlagOf(item.prints) }
     if (inBox) { box.push(placed); continue }
     if (pick.binderMiss) { none.push(placed); continue }
     const { set, set_name, released_at } = pick.first

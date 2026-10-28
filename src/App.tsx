@@ -8,10 +8,10 @@ import { CardCombo } from './CardCombo'
 import { ListView } from './ListView'
 import { useCardList } from './useCardList'
 import {
-  fetchResult, imageOf, NotFoundError, RateLimitError, resolveName, scgSearchUrl,
+  caseFlagOf, fetchResult, imageOf, NotFoundError, RateLimitError, resolveName, scgSearchUrl,
   pickFirst, sharedBinderOf, type Card as ScryCard, type Result,
 } from './scryfall'
-import { BinderToggle, fmtDate, LINK_PRIMARY, LINK_SECONDARY, RARITY_VARIANT } from './ui'
+import { BinderToggle, CaseNote, fmtDate, LINK_PRIMARY, LINK_SECONDARY, RARITY_VARIANT } from './ui'
 
 type Theme = 'dark' | 'light'
 type View = 'card' | 'list'
@@ -174,7 +174,8 @@ function Printings({ result, binder }: { result: Result; binder: boolean }) {
   // Box cards report their true first printing; the box is the storage answer.
   const { first, fallback, earliest, binderMiss } = useMemo(() => pickFirst(prints, binder && !inBox), [prints, binder, inBox])
   const shared = binder && !inBox && !binderMiss ? sharedBinderOf(first.set) : null
-  const paperCount =prints.filter((p) => p.games.includes('paper')).length
+  const caseFlag = useMemo(() => caseFlagOf(prints), [prints])
+  const paperCount = prints.filter((p) => p.games.includes('paper')).length
   const img = imageOf(first, 'png') ?? imageOf(first, 'large')
 
   return (
@@ -188,6 +189,7 @@ function Printings({ result, binder }: { result: Result; binder: boolean }) {
             {first.released_at.slice(0, 4)} · {first.set.toUpperCase()} #{first.collector_number}
             {shared && <> · in the {shared} binder</>}
           </p>
+          {caseFlag && <CaseNote flag={caseFlag} name={name} />}
         </div>
         {img && <img className="hero-img" src={img} alt={`${name}, ${first.set_name} printing`} width={488} height={680} />}
         <div className="hero-body">
