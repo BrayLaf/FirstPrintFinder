@@ -116,7 +116,7 @@ const MAGIC_2010 = '2009-07-17'
 const SHARED_BINDERS: { title: string; sets: string[] }[] = [
   { title: 'Arabian Nights / Antiquities', sets: ['arn', 'atq'] },
   { title: 'Commander (2011-2021)', sets: ['cmd', 'c13', 'c14', 'c15', 'c16', 'c17', 'c18', 'c19', 'c20', 'c21'] },
-  { title: 'Core sets', sets: ['m10', 'm11', 'm12', 'm13', 'm14', 'm15', 'ori'] },
+  { title: 'Core sets', sets: ['m10', 'm11', 'm12', 'm13', 'm14', 'm15'] },
   { title: 'Planechase / Battlebond / Game Night / Commander Masters', sets: ['hop', 'pc2', 'pca', 'bbd', 'gnt', 'gn2', 'gn3', 'cmm'] },
   { title: 'Conspiracy', sets: ['cns', 'cn2'] },
   { title: 'Mystical Archive', sets: ['sta', 'soa'] },
@@ -144,10 +144,20 @@ const COMMANDER_PARENT = new Map<string, [string, string]>([
   ['mdc', ['mdd', 'Marvel: Darkhold Destiny']],
   // Marvel Super Heroes Commander (msc) has its own binder; see below.
 ])
+// Bonus-sheet sets filed inside another set's binder, mixed in with it. Shown as the
+// parent set everywhere, so nobody goes looking for a binder that doesn't exist.
+// Set code -> [parent set code, parent set name], from Scryfall's `parent_set_code`.
+const BONUS_SHEETS = new Map<string, [string, string]>([
+  ['bot', ['bro', "The Brothers' War"]], // Transformers (Optimus Prime)
+])
+/** The set a card is filed under: its own, or the parent set for a bonus sheet. */
+export const filedSet = (c: Card, binder = true): { code: string; name: string } =>
+  (binder && BONUS_SHEETS.get(c.set)) ? { code: BONUS_SHEETS.get(c.set)![0], name: BONUS_SHEETS.get(c.set)![1] } : { code: c.set, name: c.set_name }
 // Products with a binder of their own (Core Set 2019-2021 and Foundations are covered by the core rule).
 const EXTRA_BINDER_SETS = new Set([
   'ugl', 'ust', 'unf', // Un-sets; Unhinged and Unsanctioned have no binder
   'mh1', 'mh2', 'mh3', 'jmp', 'j22', 'j25', 'ltr', 'acr',
+  'ori', // Magic Origins has its own binder
   'cmr', 'clb', // Commander Legends, Commander Legends: Battle for Baldur's Gate
   'msc', // Marvel Super Heroes Commander, with its Jumpstart cards
   'mar', // Marvel Universe
@@ -155,6 +165,7 @@ const EXTRA_BINDER_SETS = new Set([
 const isBinderSet = (c: Card) =>
   SHARED_BY_SET.has(c.set) ||
   COMMANDER_PARENT.has(c.set) ||
+  BONUS_SHEETS.has(c.set) ||
   EXTRA_BINDER_SETS.has(c.set) ||
   (c.released_at >= LEGENDS &&
     (c.set_type === 'expansion' || (c.set_type === 'core' && c.released_at >= MAGIC_2010)))
@@ -362,7 +373,8 @@ export function groupForBinders(list: ListCard[], binder: boolean): SetGroup[] {
     const placed: Placed = { ...item, pick, inBox, color: colorOf(pick.first), caseFlag: caseFlagOf(item.prints) }
     if (inBox) { box.push(placed); continue }
     if (pick.binderMiss) { none.push(placed); continue }
-    const { set, set_name, released_at } = pick.first
+    const { released_at } = pick.first
+    const { code: set, name: set_name } = filedSet(pick.first, binder)
     const shared = binder ? sharedBinderOf(set) : null
     const sub = `${released_at.slice(0, 4)} · ${set.toUpperCase()}${shared ? ` · in the ${shared} binder` : ''}`
     const group = sets.get(set) ?? {
