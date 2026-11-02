@@ -171,8 +171,8 @@ export default function App() {
 function Printings({ result, binder }: { result: Result; binder: boolean }) {
   const { prints, name } = result
   const inBox = binder && inCommanderBox(name)
-  // Box cards report their true first printing; the box is the storage answer.
-  const { first, fallback, earliest, binderMiss } = useMemo(() => pickFirst(prints, binder && !inBox), [prints, binder, inBox])
+  // Box cards still show their first printing per binder rules: they may also be filed there.
+  const { first, fallback, earliest, binderMiss } = useMemo(() => pickFirst(prints, binder), [prints, binder])
   const shared = binder && !inBox && !binderMiss ? sharedBinderOf(first.set) : null
   const filed = binder && !inBox && !binderMiss ? filedSet(first) : null
   const bonusOf = filed && filed.code !== first.set ? first.set_name : null
