@@ -115,6 +115,7 @@ const MAGIC_2010 = '2009-07-17'
 // binder even when the rule above would skip them (e.g. Arabian Nights predates Legends).
 const SHARED_BINDERS: { title: string; sets: string[] }[] = [
   { title: 'Arabian Nights / Antiquities', sets: ['arn', 'atq'] },
+  { title: 'Commander (2011-2021)', sets: ['cmd', 'c13', 'c14', 'c15', 'c16', 'c17', 'c18', 'c19', 'c20', 'c21'] },
   { title: 'Core sets', sets: ['m10', 'm11', 'm12', 'm13', 'm14', 'm15', 'ori'] },
   { title: 'Planechase / Battlebond / Game Night / Commander Masters', sets: ['hop', 'pc2', 'pca', 'bbd', 'gnt', 'gn2', 'gn3', 'cmm'] },
   { title: 'Conspiracy', sets: ['cns', 'cn2'] },

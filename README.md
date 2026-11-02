@@ -25,6 +25,7 @@ Mirrors how the store files cards: only known sets count. A printing qualifies i
 | Arabian Nights / Antiquities (shared) | ARN, ATQ |
 | Core sets (shared) | M10–M15, Magic Origins. Core Set 2019, 2020, 2021 and Foundations each have their own binder |
 | Planechase / Battlebond / Game Night / Commander Masters (shared) | HOP, PC2, PCA, BBD, GNT, GN2, GN3, CMM |
+| Commander 2011–2021 (shared) | CMD, C13–C21, the yearly decks |
 | Conspiracy (shared) | CNS, CN2 |
 | Mystical Archive (shared) | STA, SOA (Secrets of Strixhaven) |
 | Universes Beyond (shared) | Fallout, Doctor Who, Warhammer 40,000 |
@@ -64,11 +65,15 @@ Cards worth $11+ at Star City Games go in the case, not a binder. Scryfall has n
 
 The Card tab shows the warning under the set name with the price and a Star City link. In the List tab (Sorting and Pulling) cards stay in their binder group with a "Case card" / "Maybe case" badge and price on the row, the same note in the row details, and a case count in the summary bar. Like the Pulling marks, the badges differ by text, icon (▲/△) and solid vs dashed edge, not color alone.
 
+### Pair pulling
+
+In Pulling mode, **Pair pulling** splits the screen into two panes over the same list: Person A starts at the top, Person B at the bottom, and they meet in the middle. Each pane has its own scroll position and open card; found / not found marks are shared, so a card marked in one pane shows as marked in the other. On a phone the panes become an A / B switcher. The setting is remembered (`fpf-list-pair`).
+
 ## Known gaps — check at the store
 
 - **Binder list** above was confirmed at the store. Add or remove sets in `SHARED_BINDERS` / `EXTRA_BINDER_SETS` in `src/scryfall.ts`. Not yet confirmed:
   - Other draft-innovation sets (Ravnica: Clue Edition, Mystery Booster Commander), Modern Horizons Timeshifts (H1R/H2R) and Planechase plane cards are skipped.
 - **Case card warning** thresholds come from comparing 292 random cards' cheapest Scryfall price with Star City's cheapest NM non-foil price (Oct 2026). Star City ran a median 1.15× Scryfall above $3; the cheapest case card was $8.60 on Scryfall (Mnemonic Deluge) and the priciest non-case card $13.07 (Jace, Cunning Castaway), so $8 has little margin. Prices drift: recheck now and then, and adjust `CASE_MAYBE_USD` / `CASE_USD` in `src/scryfall.ts`. It compares the cheapest copy at each store; a pricier printing of a cheaper card can still be a case card.
-- **Standalone Commander decks** (e.g. Commander 2011) are skipped like other products. Cards found only there fall to their next qualifying set, or to the true first printing with a note. Commander decks tied to a set are filed with that set (see above).
+- **Commander decks**: the yearly decks 2011–2021 share one binder (earliest printing wins, so a card first in Commander 2021 files there even if reprinted later). Decks tied to a set are filed with that set. Commander Anthology, Commander Collection and other Commander products are still skipped.
 - **Prepared-spell cards** (Scryfall layout `prepare`, mostly Secrets of Strixhaven, e.g. "Emeritus of Ideation // Ancestral Recall") are separate cards. They are dropped from printings when you search the spell's name, and kept when you search their own name.
 - **Commander box list** only has the two cards mentioned so far (`src/commanderBox.ts`).

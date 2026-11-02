@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type KeyboardEvent, type Ref } from 'react'
+import { useEffect, useId, useRef, useState, type KeyboardEvent, type MutableRefObject, type Ref } from 'react'
 import { Input } from './kaika'
 import { autocomplete } from './scryfall'
 
@@ -22,6 +22,17 @@ export function CardCombo({ label, placeholder, value, onChange, onSubmit, quiet
   const [active, setActive] = useState(-1)
   const abort = useRef<AbortController>()
   const id = useId()
+  const local = useRef<HTMLInputElement | null>(null)
+  const setRef = (el: HTMLInputElement | null) => {
+    local.current = el
+    if (typeof inputRef === 'function') inputRef(el)
+    else if (inputRef) (inputRef as MutableRefObject<HTMLInputElement | null>).current = el
+  }
+  const clear = () => {
+    onChange('')
+    setSuggestions([])
+    local.current?.focus({ preventScroll: true })
+  }
 
   useEffect(() => {
     const q = value.trim()
@@ -60,7 +71,7 @@ export function CardCombo({ label, placeholder, value, onChange, onSubmit, quiet
   return (
     <div className="combo">
       <Input
-        ref={inputRef}
+        ref={setRef}
         label={label}
         placeholder={placeholder}
         value={value}
@@ -73,6 +84,12 @@ export function CardCombo({ label, placeholder, value, onChange, onSubmit, quiet
         aria-autocomplete="list"
         aria-activedescendant={active >= 0 ? `${id}-${active}` : undefined}
         leading={<span aria-hidden>⌕</span>}
+        trailing={value ? (
+          <button
+            type="button" className="clear-btn" aria-label={`Clear ${label.toLowerCase()}`}
+            onMouseDown={(e) => e.preventDefault()} onClick={clear}
+          >✕</button>
+        ) : undefined}
         onChange={(e) => { onChange(e.target.value); setOpen(true) }}
         onFocus={() => setOpen(true)}
         onBlur={() => setOpen(false)}
