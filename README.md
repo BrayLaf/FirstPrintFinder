@@ -39,7 +39,7 @@ Everything else is skipped: the old "Edition" core sets, Portal (all three), Ant
 
 ### Commander box
 
-Cards in `src/commanderBox.ts` (Sol Ring, Arcane Signet) show **Commander box** as the headline in binder mode, with their first printing under the binder rules below (Sol Ring: Commander 2011, not Alpha), since a copy may also be filed there. Add card names to that list as the box changes.
+Cards in `src/commanderBox.ts` (Sol Ring, Command Tower, Mind Stone, Lightning Greaves and the rest of the list) show **Commander box** as the headline in binder mode, with their first printing under the binder rules below (Sol Ring: Commander 2011, not Alpha), since a copy may also be filed there. Add card names to that list as the box changes.
 
 ## List tab
 
@@ -83,4 +83,4 @@ The Card tab shows the warning under the set name with the price and a Star City
 - **Case card warning** thresholds come from comparing 292 random cards' cheapest Scryfall price with Star City's cheapest NM non-foil price (Oct 2026). Star City ran a median 1.15× Scryfall above $3; the cheapest case card was $8.60 on Scryfall (Mnemonic Deluge) and the priciest non-case card $13.07 (Jace, Cunning Castaway), so $8 has little margin. Prices drift: recheck now and then, and adjust `CASE_MAYBE_USD` / `CASE_USD` in `src/scryfall.ts`. It compares the cheapest copy at each store; a pricier printing of a cheaper card can still be a case card.
 - **Commander decks**: the yearly decks 2011–2021 share one binder (earliest printing wins, so a card first in Commander 2021 files there even if reprinted later). Decks tied to a set are filed with that set. Commander Anthology, Commander Collection and other Commander products are still skipped.
 - **Prepared-spell cards** (Scryfall layout `prepare`, mostly Secrets of Strixhaven, e.g. "Emeritus of Ideation // Ancestral Recall") are separate cards. They are dropped from printings when you search the spell's name, and kept when you search their own name.
-- **Commander box list** only has the two cards mentioned so far (`src/commanderBox.ts`).
+- **Commander box list** is the 23 cards the store has named so far (`src/commanderBox.ts`); more may be missing.
