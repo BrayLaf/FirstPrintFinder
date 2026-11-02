@@ -25,7 +25,7 @@ Mirrors how the store files cards: only known sets count. A printing qualifies i
 | Arabian Nights / Antiquities (shared) | ARN, ATQ |
 | Core sets (shared) | M10–M15, Magic Origins. Core Set 2019, 2020, 2021 and Foundations each have their own binder |
 | Planechase / Battlebond / Game Night / Commander Masters (shared) | HOP, PC2, PCA, BBD, GNT, GN2, GN3, CMM |
-| Commander 2011–2021 (shared) | CMD, C13–C21, the yearly decks |
+| Commander 2011–2021 (shared) | The yearly decks: Commander 2011, then 2013–2021 (CMD, C13–C21; there is no 2012 deck). Earliest printing wins, so a card first printed here files here even if it was reprinted in a later set |
 | Conspiracy (shared) | CNS, CN2 |
 | Mystical Archive (shared) | STA, SOA (Secrets of Strixhaven) |
 | Universes Beyond (shared) | Fallout, Doctor Who, Warhammer 40,000 |
@@ -59,7 +59,12 @@ Two modes (saved as `fpf-list-mode`; pair pulling is saved as `fpf-list-pair`):
 
 ### Pair pulling (Pulling mode)
 
-In Pulling mode, **Pair pulling** splits the screen into two panes over the same list: Person A starts at the top, Person B at the bottom, and they meet in the middle. Each pane has its own scroll position and open card; found / not found marks are shared, so a card marked in one pane shows as marked in the other. On a phone the panes become an A / B switcher. The setting is remembered (`fpf-list-pair`).
+For two people pulling one list at the same computer. In Pulling mode, the **Pair pulling** button splits the screen into two panes over the same list: Person A starts at the top, Person B starts at the bottom, and they meet in the middle.
+
+- Each pane has its own scroll position and open card, so previewing a card in one never moves the other. Both panes show the whole list rather than fixed halves; marks are shared, so a card marked in one pane shows as marked in the other, and each pane header shows how many cards are still unmarked.
+- The panes use the full width and height of the screen (everything else on the page keeps its normal width). The search and paste controls are hidden while it is on; turn it off to add cards.
+- On a phone the panes become a Person A / Person B switcher showing one at a time.
+- The setting is remembered (`fpf-list-pair`). The unmarked-cards banner and the customer message work as in normal Pulling mode.
 
 ## Case cards
 
