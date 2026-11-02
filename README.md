@@ -49,12 +49,17 @@ Paste a decklist, upload a `.txt`/`.csv`, or search cards one at a time to build
 - **Color** is read from the mana symbols in the mana cost only, not color identity. Hybrid pips count both colors. Split cards use both halves; DFCs and adventures use the front face. No colored pips means Land if it's a land, else Colorless (so no-cost cards like Ancestral Vision are Colorless).
 - **Parsing** (`src/parseList.ts`) accepts `4 Card`, `4x Card`, `Card x4` and bare names, ignores set codes, foil marks and section headers, and reads CSVs with a name column. Duplicates merge.
 - Lines that don't match a card go to **Not recognized**; "Search" there replaces the line with the card you pick.
+- Every search box has a ✕ button to clear it.
 - The list (names, counts and marks) is kept in `localStorage` (`fpf-list`); printings are looked up again on each visit.
 
-Two modes (saved as `fpf-list-mode`):
+Two modes (saved as `fpf-list-mode`; pair pulling is saved as `fpf-list-pair`):
 
-- **Sorting**: a card added by search scrolls into view and is highlighted in its binder group, so you can see what else goes in that binder.
-- **Pulling**: for a customer's decklist. Each row gets **Found** (all copies) / **Not found** (none) buttons, and rows with more than one copy also get a "2 of 4 found" counter. The message box at the bottom builds the reply ("Cards we had" / "We didn't have") with a Copy button; a partly found card appears in both sections with its counts. Unmarked cards and unrecognized lines are left out, with a warning. Marks never rely on color alone (two coworkers are colorblind): the pressed button is filled, bold and shows ✓/✕, fully found names are struck through, a partial count is bold, and the row edge is solid for found, dashed for not found, dotted for partly found.
+- **Sorting**: a card added by search is highlighted briefly in its binder group, so you can see what else goes in that binder. The page doesn't scroll and the search box keeps focus, so you can keep adding cards.
+- **Pulling**: for a customer's decklist. Each row gets **Found** (all copies) / **Not found** (none) buttons, and rows with more than one copy also get a "2 of 4 found" counter. The message box at the bottom builds the reply ("Cards we had" / "We didn't have") with a Copy button; a partly found card appears in both sections with its counts. Unmarked cards and unrecognized lines are left out of it, and a banner above the list names every card not yet marked so none are missed. Marks never rely on color alone (two coworkers are colorblind): the pressed button is filled, bold and shows ✓/✕, fully found names are struck through, a partial count is bold, and the row edge is solid for found, dashed for not found, dotted for partly found.
+
+### Pair pulling (Pulling mode)
+
+In Pulling mode, **Pair pulling** splits the screen into two panes over the same list: Person A starts at the top, Person B at the bottom, and they meet in the middle. Each pane has its own scroll position and open card; found / not found marks are shared, so a card marked in one pane shows as marked in the other. On a phone the panes become an A / B switcher. The setting is remembered (`fpf-list-pair`).
 
 ## Case cards
 
@@ -64,10 +69,6 @@ Cards worth $11+ at Star City Games go in the case, not a binder. Scryfall has n
 - **$14+: "Case card"**. Almost surely in the case; the Star City link is there to confirm.
 
 The Card tab shows the warning under the set name with the price and a Star City link. In the List tab (Sorting and Pulling) cards stay in their binder group with a "Case card" / "Maybe case" badge and price on the row, the same note in the row details, and a case count in the summary bar. Like the Pulling marks, the badges differ by text, icon (▲/△) and solid vs dashed edge, not color alone.
-
-### Pair pulling
-
-In Pulling mode, **Pair pulling** splits the screen into two panes over the same list: Person A starts at the top, Person B at the bottom, and they meet in the middle. Each pane has its own scroll position and open card; found / not found marks are shared, so a card marked in one pane shows as marked in the other. On a phone the panes become an A / B switcher. The setting is remembered (`fpf-list-pair`).
 
 ## Known gaps — check at the store
 
