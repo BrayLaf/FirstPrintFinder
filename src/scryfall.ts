@@ -369,7 +369,7 @@ export function groupForBinders(list: ListCard[], binder: boolean): SetGroup[] {
   for (const item of list) {
     if (!item.prints.length) { basics.push({ ...item, pick: null, inBox: false, color: 'L', caseFlag: null }); continue }
     const inBox = binder && inCommanderBox(item.name)
-    const pick = pickFirst(item.prints, binder && !inBox)
+    const pick = pickFirst(item.prints, binder)
     const placed: Placed = { ...item, pick, inBox, color: colorOf(pick.first), caseFlag: caseFlagOf(item.prints) }
     if (inBox) { box.push(placed); continue }
     if (pick.binderMiss) { none.push(placed); continue }
