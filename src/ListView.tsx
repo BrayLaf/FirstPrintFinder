@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from 'react'
 import { Badge, Button, Card, CardContent } from './kaika'
 import { CardCombo } from './CardCombo'
 import { parseList, type Entry } from './parseList'
@@ -11,6 +11,10 @@ type List = ReturnType<typeof useCardList>
 type Mode = 'sort' | 'pull'
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
+
+function readPair(): boolean {
+  try { return localStorage.getItem('fpf-list-pair') === '1' } catch { return false }
+}
 
 function readMode(): Mode {
   try { return localStorage.getItem('fpf-list-mode') === 'pull' ? 'pull' : 'sort' } catch { return 'sort' }
@@ -31,6 +35,10 @@ function customerMessage(cards: ListEntry[]): string {
 
 export function ListView({ list, binder, setBinder }: { list: List; binder: boolean; setBinder: (on: boolean) => void }) {
   const [mode, setMode] = useState<Mode>(readMode)
+  // Pair pulling: two panes over the same list, each with its own scroll and open card.
+  const [pairOn, setPairOn] = useState(readPair)
+  const [side, setSide] = useState<'a' | 'b'>('a')
+  const pair = mode === 'pull' && pairOn
   // Last card added by search, highlighted in its binder group.
   const [recent, setRecent] = useState<string | null>(null)
   const [query, setQuery] = useState('')
@@ -47,6 +55,15 @@ export function ListView({ list, binder, setBinder }: { list: List; binder: bool
   useEffect(() => {
     try { localStorage.setItem('fpf-list-mode', mode) } catch { /* ignore */ }
   }, [mode])
+
+  // Bring the panes to the top of the screen when pair pulling starts.
+  useEffect(() => {
+    if (pair) document.querySelector('.pair')?.scrollIntoView({ block: 'start' })
+  }, [pair])
+
+  useEffect(() => {
+    try { localStorage.setItem('fpf-list-pair', pairOn ? '1' : '0') } catch { /* ignore */ }
+  }, [pairOn])
 
   useEffect(() => {
     if (!confirmClear) return
@@ -101,7 +118,7 @@ export function ListView({ list, binder, setBinder }: { list: List; binder: bool
 
   return (
     <>
-      <section className="search list-add">
+      <section className={`search list-add${pair ? ' is-pair' : ''}`}>
         <div className="mode" role="group" aria-label="List mode">
           <Button variant={mode === 'sort' ? 'primary' : 'secondary'} size="sm" aria-pressed={mode === 'sort'} onClick={() => setMode('sort')}>
             Sorting
@@ -109,10 +126,17 @@ export function ListView({ list, binder, setBinder }: { list: List; binder: bool
           <Button variant={mode === 'pull' ? 'primary' : 'secondary'} size="sm" aria-pressed={mode === 'pull'} onClick={() => setMode('pull')}>
             Pulling
           </Button>
+          {mode === 'pull' && (
+            <Button variant={pairOn ? 'primary' : 'secondary'} size="sm" aria-pressed={pairOn} onClick={() => setPairOn(!pairOn)}>
+              Pair pulling
+            </Button>
+          )}
           <small>
             {mode === 'sort'
               ? 'Search cards to see which binder they go in and what else is in it.'
-              : 'Mark each card found or not found, then copy the message for the customer.'}
+              : pair
+                ? 'Two people, one list: one starts at the top, one at the bottom. Marks are shared.'
+                : 'Mark each card found or not found, then copy the message for the customer.'}
           </small>
         </div>
 
@@ -217,12 +241,34 @@ export function ListView({ list, binder, setBinder }: { list: List; binder: bool
         </div>
       )}
 
-      {groups.map((g) => (
-        <SetSection
-          key={g.key} group={g} onQty={list.setQty} recent={recent}
-          marks={mode === 'pull' ? marks : null} onFound={list.setFound}
-        />
-      ))}
+      {pair ? (
+        <div className="pair">
+          <div className="pair-switch mode" role="group" aria-label="Pane">
+            <Button variant={side === 'a' ? 'primary' : 'secondary'} size="sm" aria-pressed={side === 'a'} onClick={() => setSide('a')}>Person A (top)</Button>
+            <Button variant={side === 'b' ? 'primary' : 'secondary'} size="sm" aria-pressed={side === 'b'} onClick={() => setSide('b')}>Person B (bottom)</Button>
+          </div>
+          {(['a', 'b'] as const).map((p) => (
+            <PairPane
+              key={p} id={p} title={p === 'a' ? 'Person A · from the top' : 'Person B · from the bottom'}
+              active={side === p} fromEnd={p === 'b'} ready={groups.length > 0} open={counts.open}
+            >
+              {groups.map((g) => (
+                <SetSection
+                  key={g.key} group={g} pane={p} onQty={list.setQty} recent={recent}
+                  marks={marks} onFound={list.setFound}
+                />
+              ))}
+            </PairPane>
+          ))}
+        </div>
+      ) : (
+        groups.map((g) => (
+          <SetSection
+            key={g.key} group={g} pane="" onQty={list.setQty} recent={recent}
+            marks={mode === 'pull' ? marks : null} onFound={list.setFound}
+          />
+        ))
+      )}
 
       {mode === 'pull' && list.total > 0 && (
         <MessageBox
@@ -233,6 +279,30 @@ export function ListView({ list, binder, setBinder }: { list: List; binder: bool
 
       {empty && !list.busy && <p className="note">Paste a decklist or search for cards to start a list.</p>}
     </>
+  )
+}
+
+/** One person's scrolling pane. The bottom pane starts scrolled to the end. */
+function PairPane({ id, title, active, fromEnd, ready, open, children }: {
+  id: string; title: string; active: boolean; fromEnd: boolean; ready: boolean; open: number; children: ReactNode
+}) {
+  const body = useRef<HTMLDivElement>(null)
+  const placed = useRef(false)
+  // Wait for the cards to load, then jump to the end once; later adds don't move it.
+  useEffect(() => {
+    const el = body.current
+    if (!fromEnd || !ready || placed.current || !el) return
+    el.scrollTop = el.scrollHeight
+    placed.current = true
+  }, [fromEnd, ready])
+  return (
+    <section className={`pair-pane${active ? ' on' : ''}`} aria-label={title}>
+      <header className="pair-head">
+        <strong>{title}</strong>
+        <span>{open === 0 ? 'All marked ✓' : `${open} to check`}</span>
+      </header>
+      <div className="pair-body" ref={body} data-pane={id}>{children}</div>
+    </section>
   )
 }
 
@@ -279,12 +349,12 @@ interface RowProps {
   onFound: (name: string, found: number | undefined) => void
 }
 
-function SetSection({ group, ...rowProps }: { group: SetGroup } & RowProps) {
+function SetSection({ group, pane, ...rowProps }: { group: SetGroup; pane: string } & RowProps) {
   const count = group.cards.reduce((n, c) => n + c.qty, 0)
   return (
-    <section className="set-group" aria-labelledby={`g-${group.key}`}>
+    <section className="set-group" aria-labelledby={`g-${pane}${group.key}`}>
       <header className="set-head">
-        <h2 id={`g-${group.key}`}>{group.title}</h2>
+        <h2 id={`g-${pane}${group.key}`}>{group.title}</h2>
         <p>{group.sub} · {plural(count, 'card')}</p>
       </header>
       <ul className="rows">

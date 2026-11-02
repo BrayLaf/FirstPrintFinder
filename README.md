@@ -65,6 +65,10 @@ Cards worth $11+ at Star City Games go in the case, not a binder. Scryfall has n
 
 The Card tab shows the warning under the set name with the price and a Star City link. In the List tab (Sorting and Pulling) cards stay in their binder group with a "Case card" / "Maybe case" badge and price on the row, the same note in the row details, and a case count in the summary bar. Like the Pulling marks, the badges differ by text, icon (▲/△) and solid vs dashed edge, not color alone.
 
+### Pair pulling
+
+In Pulling mode, **Pair pulling** splits the screen into two panes over the same list: Person A starts at the top, Person B at the bottom, and they meet in the middle. Each pane has its own scroll position and open card; found / not found marks are shared, so a card marked in one pane shows as marked in the other. On a phone the panes become an A / B switcher. The setting is remembered (`fpf-list-pair`).
+
 ## Known gaps — check at the store
 
 - **Binder list** above was confirmed at the store. Add or remove sets in `SHARED_BINDERS` / `EXTRA_BINDER_SETS` in `src/scryfall.ts`. Not yet confirmed:
