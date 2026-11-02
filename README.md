@@ -23,13 +23,14 @@ Mirrors how the store files cards: only known sets count. A printing qualifies i
 | Binder | Sets |
 | --- | --- |
 | Arabian Nights / Antiquities (shared) | ARN, ATQ |
-| Core sets (shared) | M10–M15, Magic Origins. Core Set 2019, 2020, 2021 and Foundations each have their own binder |
+| Core sets (shared) | M10–M15. Magic Origins, Core Set 2019, 2020, 2021 and Foundations each have their own binder |
 | Planechase / Battlebond / Game Night / Commander Masters (shared) | HOP, PC2, PCA, BBD, GNT, GN2, GN3, CMM |
 | Commander 2011–2021 (shared) | The yearly decks: Commander 2011, then 2013–2021 (CMD, C13–C21; there is no 2012 deck). Earliest printing wins, so a card first printed here files here even if it was reprinted in a later set |
 | Conspiracy (shared) | CNS, CN2 |
 | Mystical Archive (shared) | STA, SOA (Secrets of Strixhaven) |
 | Universes Beyond (shared) | Fallout, Doctor Who, Warhammer 40,000 |
 | A set's binder, at the front | The commander decks released with a set (New Capenna Commander, MH3 Commander, Final Fantasy Commander, ...), divided from the set. The list is `COMMANDER_PARENT`; add new ones as they release |
+| Bonus sheets, shown as their parent set | Transformers (Optimus Prime) is shown as The Brothers' War everywhere and mixed in with it. The list is `BONUS_SHEETS` |
 | Their own binders | Commander Legends, Commander Legends: Battle for Baldur's Gate; Unglued, Unstable, Unfinity; Time Spiral Timeshifted; Modern Horizons 1–3; Jumpstart, Jumpstart 2022, Foundations Jumpstart; Lord of the Rings; Assassin's Creed; Marvel Universe (MAR); Marvel Super Heroes Commander (MSC, which also holds the Marvel Jumpstart cards) |
 
 Shared binders are divided by set, so the app still names the set and adds "in the … binder". In the List, sets in one shared binder sit next to each other.

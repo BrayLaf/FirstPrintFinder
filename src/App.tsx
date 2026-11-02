@@ -9,7 +9,7 @@ import { ListView } from './ListView'
 import { useCardList } from './useCardList'
 import {
   caseFlagOf, fetchResult, imageOf, NotFoundError, RateLimitError, resolveName, scgSearchUrl,
-  pickFirst, sharedBinderOf, type Card as ScryCard, type Result,
+  pickFirst, sharedBinderOf, filedSet, type Card as ScryCard, type Result,
 } from './scryfall'
 import { BinderToggle, CaseNote, fmtDate, LINK_PRIMARY, LINK_SECONDARY, RARITY_VARIANT } from './ui'
 
@@ -174,6 +174,8 @@ function Printings({ result, binder }: { result: Result; binder: boolean }) {
   // Box cards report their true first printing; the box is the storage answer.
   const { first, fallback, earliest, binderMiss } = useMemo(() => pickFirst(prints, binder && !inBox), [prints, binder, inBox])
   const shared = binder && !inBox && !binderMiss ? sharedBinderOf(first.set) : null
+  const filed = binder && !inBox && !binderMiss ? filedSet(first) : null
+  const bonusOf = filed && filed.code !== first.set ? first.set_name : null
   const caseFlag = useMemo(() => caseFlagOf(prints), [prints])
   const paperCount = prints.filter((p) => p.games.includes('paper')).length
   const img = imageOf(first, 'png') ?? imageOf(first, 'large')
@@ -183,10 +185,11 @@ function Printings({ result, binder }: { result: Result; binder: boolean }) {
       <Card variant="raised" glow className="hero">
         <div className="answer">
           <p className="eyebrow accent">{inBox ? 'Store in' : 'First printed in'}</p>
-          <h2 className="answer-set">{inBox ? 'Commander box' : first.set_name}</h2>
+          <h2 className="answer-set">{inBox ? 'Commander box' : filed ? filed.name : first.set_name}</h2>
           <p className="answer-meta">
             <strong>{name}</strong> · {inBox && <>first printed in {first.set_name} · </>}
             {first.released_at.slice(0, 4)} · {first.set.toUpperCase()} #{first.collector_number}
+            {bonusOf && <> · {bonusOf} cards are filed in this set's binder</>}
             {shared && <> · in the {shared} binder</>}
           </p>
           {caseFlag && <CaseNote flag={caseFlag} name={name} />}
