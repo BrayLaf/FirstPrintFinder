@@ -65,6 +65,7 @@ export function ListView({ list, binder, setBinder }: { list: List; binder: bool
     setRecent(name.toLowerCase())
     setQuery('')
     setFixing(null)
+    searchRef.current?.focus({ preventScroll: true })
   }
 
   const addPasted = (text: string) => {
@@ -91,6 +92,7 @@ export function ListView({ list, binder, setBinder }: { list: List; binder: bool
   const empty = list.total === 0 && list.missing.length === 0
   const caseCount = { case: 0, maybe: 0 }
   for (const g of groups) for (const c of g.cards) if (c.caseFlag) caseCount[c.caseFlag.tier] += c.qty
+  const unmarkedNames = list.cards.filter((c) => c.found === undefined).map((c) => c.name).sort((a, b) => a.localeCompare(b))
   const counts = { found: 0, missing: 0, open: 0 }
   for (const c of list.cards) {
     if (c.found === undefined) counts.open += c.qty
@@ -181,6 +183,12 @@ export function ListView({ list, binder, setBinder }: { list: List; binder: bool
             </ul>
           </CardContent>
         </Card>
+      )}
+
+      {mode === 'pull' && unmarkedNames.length > 0 && (
+        <p className="unmarked-warning" role="status">
+          <strong>{plural(unmarkedNames.length, 'card')} not marked found or not found:</strong> {unmarkedNames.join(', ')}
+        </p>
       )}
 
       {list.total > 0 && (
@@ -288,7 +296,6 @@ function SetSection({ group, ...rowProps }: { group: SetGroup } & RowProps) {
 
 function Row({ card, onQty, recent, marks, onFound }: { card: Placed } & RowProps) {
   const [open, setOpen] = useState(false)
-  const self = useRef<HTMLLIElement>(null)
   const { name, qty, pick, inBox, color, caseFlag } = card
   const first = pick?.first
   const img = first && (imageOf(first, 'png') ?? imageOf(first, 'large'))
@@ -296,15 +303,11 @@ function Row({ card, onQty, recent, marks, onFound }: { card: Placed } & RowProp
   const mark = found === undefined ? null : found === qty ? 'found' : found === 0 ? 'missing' : 'partial'
   const flash = !!recent && (name.toLowerCase() === recent || name.split(' // ')[0].toLowerCase() === recent)
 
-  useEffect(() => {
-    if (flash) self.current?.scrollIntoView({ block: 'center', behavior: 'smooth' })
-  }, [flash])
-
   const cls = ['row', open && 'open', flash && 'flash', mark && `marked-${mark}`].filter(Boolean).join(' ')
   const toggle = (m: 'found' | 'missing') => onFound(name, mark === m ? undefined : m === 'found' ? qty : 0)
 
   return (
-    <li ref={self} className={cls}>
+    <li className={cls}>
       <div className="row-line">
         <button type="button" className="row-main" aria-expanded={open} onClick={() => setOpen(!open)}>
           <span className="qty">{qty}×</span>
