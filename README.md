@@ -39,7 +39,7 @@ Everything else is skipped: the old "Edition" core sets, Portal (all three), Ant
 
 ### Commander box
 
-Cards in `src/commanderBox.ts` (Sol Ring, Arcane Signet) show **Commander box** as the headline in binder mode, with their true first printing below. Add card names to that list as the box changes.
+Cards in `src/commanderBox.ts` (Sol Ring, Arcane Signet) show **Commander box** as the headline in binder mode, with their first printing under the binder rules below (Sol Ring: Commander 2011, not Alpha), since a copy may also be filed there. Add card names to that list as the box changes.
 
 ## List tab
 
